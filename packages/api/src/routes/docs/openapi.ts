@@ -1,11 +1,11 @@
 /**
- * OpenAPI Specification for Kill Switch API
+ * OpenAPI Specification for Cloud Switch API
  */
 
 export const openApiSpec = {
   openapi: "3.1.0",
   info: {
-    title: "Kill Switch API",
+    title: "Cloud Switch API",
     version: "0.1.0",
     description: "Monitor cloud spending, auto-kill runaway services, and protect your infrastructure. Born from a $91K Cloudflare bill.",
     contact: { name: "Divinci AI", url: "https://divinci.ai", email: "support@divinci.ai" },

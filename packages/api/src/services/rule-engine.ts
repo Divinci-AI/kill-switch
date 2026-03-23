@@ -1,5 +1,5 @@
 /**
- * Kill Switch Rule Engine
+ * Cloud Switch Rule Engine
  *
  * Evaluates configurable rules against usage metrics and security events.
  * Supports:

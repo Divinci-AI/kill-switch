@@ -1,5 +1,5 @@
 /**
- * Cloudflare Billing Kill Switch
+ * Cloudflare Billing Cloud Switch
  *
  * A Cloudflare Worker that monitors usage metrics and automatically disconnects
  * runaway workers before they generate surprise bills. Born from an $80K
@@ -140,7 +140,7 @@ async function cfGraphQL(env: Env, query: string): Promise<any> {
   return data;
 }
 
-// ─── Worker Kill Switch ─────────────────────────────────────────────────────
+// ─── Worker Cloud Switch ─────────────────────────────────────────────────────
 
 async function disconnectWorker(env: Env, scriptName: string): Promise<string[]> {
   const actions: string[] = [];
@@ -267,7 +267,7 @@ async function alertPagerDuty(
         class: "billing",
         custom_details: details,
       },
-      client: "Cloudflare Billing Kill Switch",
+      client: "Cloudflare Billing Cloud Switch",
       client_url: "https://dash.cloudflare.com",
     }),
   });
@@ -470,7 +470,7 @@ export default {
 
     // Test alert integrations
     if (url.pathname === "/test-alert") {
-      await sendAlerts(env, "Test alert from Cloudflare Billing Kill Switch", "info", {
+      await sendAlerts(env, "Test alert from Cloudflare Billing Cloud Switch", "info", {
         test: true,
         timestamp: new Date().toISOString(),
         message: "If you received this, your alert integration is working correctly.",

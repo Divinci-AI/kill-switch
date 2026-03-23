@@ -135,7 +135,7 @@ export interface ForensicSnapshot {
   integrityHash: string;
 }
 
-// ─── Kill Switch Rule Engine ────────────────────────────────────────────────
+// ─── Cloud Switch Rule Engine ────────────────────────────────────────────────
 
 export type RuleTrigger = "cost" | "security" | "custom" | "api" | "agent";
 

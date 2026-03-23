@@ -1,5 +1,5 @@
 /**
- * Database Kill Switch Routes
+ * Database Cloud Switch Routes
  *
  * API for initiating, monitoring, and confirming database kill sequences.
  * Every destructive action requires a verified snapshot first.

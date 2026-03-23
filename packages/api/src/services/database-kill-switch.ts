@@ -1,5 +1,5 @@
 /**
- * Database Kill Switch
+ * Database Cloud Switch
  *
  * Nuclear option for compromised databases. Flow:
  *

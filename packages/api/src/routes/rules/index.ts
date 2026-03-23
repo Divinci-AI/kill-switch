@@ -1,5 +1,5 @@
 /**
- * Kill Switch Rules API
+ * Cloud Switch Rules API
  *
  * CRUD for programmable kill switch rules.
  * Rules can be created via:

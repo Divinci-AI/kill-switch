@@ -26,7 +26,7 @@ const cloudSqlCredential: DatabaseCredential = {
   instanceName: "prod-postgres",
 };
 
-describe("Database Kill Switch", () => {
+describe("Database Cloud Switch", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
