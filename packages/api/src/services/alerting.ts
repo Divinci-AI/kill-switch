@@ -85,13 +85,13 @@ async function alertPagerDuty(channel: AlertChannel, summary: string, severity: 
       dedup_key: dedup,
       payload: {
         summary,
-        source: "cloud-cost-guardian",
+        source: "kill-switch",
         severity,
         component: "cloud-monitoring",
         class: "billing",
         custom_details: details,
       },
-      client: "Cloud Cost Guardian",
+      client: "Kill Switch",
     }),
   });
 
@@ -147,6 +147,6 @@ async function alertWebhook(channel: AlertChannel, summary: string, severity: Se
   await fetch(webhookUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ summary, severity, details, timestamp: new Date().toISOString(), source: "cloud-cost-guardian" }),
+    body: JSON.stringify({ summary, severity, details, timestamp: new Date().toISOString(), source: "kill-switch" }),
   });
 }

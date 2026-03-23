@@ -1,5 +1,5 @@
 /**
- * Cloud Cost Guardian — Edge Agent
+ * Kill Switch — Edge Agent
  *
  * A lightweight Cloudflare Worker that runs IN the customer's account.
  * Their API token never leaves their infrastructure.

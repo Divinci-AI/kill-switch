@@ -1,12 +1,12 @@
 {
-  "name": "cloud-cost-guardian",
+  "name": "kill-switch",
   "version": "0.1.0",
   "private": true,
   "description": "Monitor cloud spending, auto-kill runaway services, protect your infrastructure. Born from a $91K Cloudflare bill.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AiExpanse/cloud-cost-guardian"
+    "url": "https://github.com/AiExpanse/kill-switch"
   },
   "workspaces": [
     "packages/*"

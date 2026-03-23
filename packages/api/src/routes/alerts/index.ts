@@ -78,7 +78,7 @@ alertRouter.post("/test", async (req, res, next) => {
       return res.status(400).json({ error: "No alert channels configured" });
     }
 
-    await sendAlerts(account.alertChannels, "Test alert from Cloud Cost Guardian", "info", {
+    await sendAlerts(account.alertChannels, "Test alert from Kill Switch", "info", {
       test: true,
       message: "If you received this, your alert integration is working correctly.",
       timestamp: new Date().toISOString(),

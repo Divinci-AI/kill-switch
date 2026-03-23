@@ -92,7 +92,7 @@ describe("Alerting Service", () => {
     const body = JSON.parse(mockFetch.mock.calls[0][1].body);
     expect(body.summary).toBe("Alert!");
     expect(body.severity).toBe("info");
-    expect(body.source).toBe("cloud-cost-guardian");
+    expect(body.source).toBe("kill-switch");
     expect(body.details.foo).toBe("bar");
   });
 

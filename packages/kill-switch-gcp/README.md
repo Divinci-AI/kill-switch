@@ -97,9 +97,9 @@ Services listed in `PROTECTED_SERVICES` will never be scaled down, even when the
 PROTECTED_SERVICES=my-api;my-webhook-handler
 ```
 
-## Part of Cloud Cost Guardian
+## Part of Kill Switch
 
-This is the GCP component of the [Cloud Cost Guardian](https://github.com/Divinci-AI/cloudflare-billing-kill-switch) project. See also:
+This is the GCP component of the [Kill Switch](https://github.com/Divinci-AI/cloudflare-billing-kill-switch) project. See also:
 
 - [Cloudflare Billing Kill Switch](https://github.com/Divinci-AI/cloudflare-billing-kill-switch) — auto-disconnect runaway Cloudflare Workers
 

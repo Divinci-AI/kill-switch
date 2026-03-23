@@ -64,7 +64,7 @@ export function createApp() {
   // Health check
   app.get("/", (_req, res) => {
     res.json({
-      service: "cloud-cost-guardian",
+      service: "kill-switch",
       status: "healthy",
       version: "0.1.0",
       providers: getAllProviders().map(p => ({ id: p.id, name: p.name })),

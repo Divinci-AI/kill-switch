@@ -1,4 +1,4 @@
-# Cloud Cost Guardian
+# Kill Switch
 
 **Monitor cloud spending, auto-kill runaway services, protect your infrastructure.**
 
@@ -19,7 +19,7 @@ Born from a **$91,316 Cloudflare Durable Objects bill**. Cloudflare has no spend
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                     Cloud Cost Guardian                          │
+│                     Kill Switch                          │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  Dashboard (React)  ──→  Guardian API (Cloud Run)               │
@@ -46,8 +46,8 @@ Born from a **$91,316 Cloudflare Durable Objects bill**. Cloudflare has no spend
 
 ```bash
 # Clone
-git clone https://github.com/AiExpanse/cloud-cost-guardian.git
-cd cloud-cost-guardian
+git clone https://github.com/AiExpanse/kill-switch.git
+cd kill-switch
 
 # Run the API locally
 cd packages/api

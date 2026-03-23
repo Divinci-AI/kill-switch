@@ -1,11 +1,11 @@
 /**
- * OpenAPI Specification for Cloud Cost Guardian API
+ * OpenAPI Specification for Kill Switch API
  */
 
 export const openApiSpec = {
   openapi: "3.1.0",
   info: {
-    title: "Cloud Cost Guardian API",
+    title: "Kill Switch API",
     version: "0.1.0",
     description: "Monitor cloud spending, auto-kill runaway services, and protect your infrastructure. Born from a $91K Cloudflare bill.",
     contact: { name: "Divinci AI", url: "https://divinci.ai", email: "support@divinci.ai" },

@@ -129,7 +129,7 @@ describe("E2E: Public Endpoints", () => {
   it("GET / returns health check", async () => {
     const res = await request(app).get("/");
     expect(res.status).toBe(200);
-    expect(res.body.service).toBe("cloud-cost-guardian");
+    expect(res.body.service).toBe("kill-switch");
     expect(res.body.status).toBe("healthy");
     expect(res.body.providers).toHaveLength(2);
   });
