@@ -1,0 +1,68 @@
+name = "cloudflare-billing-kill-switch"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Check usage every 6 hours. Adjust as needed:
+#   "*/5 * * * *"   = every 5 minutes (aggressive)
+#   "0 * * * *"     = every hour
+#   "0 */6 * * *"   = every 6 hours (default)
+#   "0 0 * * *"     = once daily
+[triggers]
+crons = ["0 */6 * * *"]
+
+[vars]
+ENVIRONMENT = "production"
+
+# ── Thresholds ───────────────────────────────────────────────────────────────
+# Alerts fire when ANY worker exceeds these thresholds in a single day.
+# Set based on your normal usage patterns. Start conservative, tune over time.
+
+# Durable Object requests per day (default: 1 million)
+# Context: DO requests cost $0.15/million. 1B requests = $150.
+DO_REQUEST_THRESHOLD = "1000000"
+
+# Durable Object wall-time per day in hours (default: 100 hours)
+# Context: DO duration costs $12.50/million GB-seconds. Long-running
+# WebSocket DOs or Containers can accumulate wall-time quickly.
+DO_WALLTIME_HOURS_THRESHOLD = "100"
+
+# Worker requests per day (default: 10 million)
+# Context: Catches feedback loops (Worker -> Queue -> Worker) that can
+# generate millions of requests in minutes. Standard Workers cost
+# $0.30/million after 10M free.
+WORKER_REQUEST_THRESHOLD = "10000000"
+
+# ── Kill Switch Behavior ─────────────────────────────────────────────────────
+
+# Auto-disconnect routes when thresholds exceeded (RECOMMENDED)
+# Removes custom domains and disables workers.dev subdomain.
+# Reversible — worker code stays intact, just stops receiving traffic.
+AUTO_DISCONNECT = "true"
+
+# Auto-delete workers when thresholds exceeded (NUCLEAR — use with caution)
+# Permanently deletes the worker script and all associated Durable Objects.
+# NOT reversible. Only enable if you'd rather lose code than money.
+AUTO_DELETE = "false"
+
+# Workers that should NEVER be killed, even if they exceed thresholds.
+# Comma-separated list of worker script names.
+# Always include this kill switch worker itself!
+PROTECTED_WORKERS = "cloudflare-billing-kill-switch,divinci-agent-stage,divinci-agent-production"
+
+# ── Secrets ──────────────────────────────────────────────────────────────────
+# Set these via `wrangler secret put <NAME>`
+#
+# REQUIRED:
+#   CLOUDFLARE_API_TOKEN    — API token with permissions:
+#                             - Account Analytics: Read
+#                             - Account Workers Scripts: Edit (for auto-disconnect)
+#                             - Account Workers Routes: Edit (for route removal)
+#   CLOUDFLARE_ACCOUNT_ID   — Your Cloudflare account ID
+#
+# ALERTING (at least one recommended):
+#   PAGERDUTY_ROUTING_KEY   — PagerDuty Events API v2 integration key
+#                             (pages on-call until acknowledged)
+#   DISCORD_WEBHOOK_URL     — Discord channel webhook URL
+#   SLACK_WEBHOOK_URL       — Slack incoming webhook URL
+#   CUSTOM_WEBHOOK_URL      — Any HTTP endpoint that accepts POST JSON

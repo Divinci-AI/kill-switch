@@ -1,0 +1,14 @@
+{
+  "name": "guardian-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloud Cost Guardian edge agent — runs in your Cloudflare account, reports to Guardian API",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

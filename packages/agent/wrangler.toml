@@ -1,0 +1,34 @@
+# Cloud Cost Guardian — Edge Agent
+#
+# Lightweight Cloudflare Worker deployed to customer accounts.
+# Reports usage metrics back to the Guardian API.
+# This is the "agent-based" model — the customer keeps their API token
+# local to their own account and never shares it with us.
+#
+# The agent:
+# 1. Runs on a cron schedule (every 5 minutes)
+# 2. Queries Cloudflare GraphQL for usage metrics
+# 3. Reports metrics to the Guardian API
+# 4. Receives kill switch commands from the Guardian API
+# 5. Executes disconnect/delete locally
+
+name = "guardian-agent"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[vars]
+# Guardian API endpoint where metrics are reported
+GUARDIAN_API_URL = "https://guardian-api-150038457816.us-central1.run.app"
+# Check thresholds (can be overridden per deployment)
+DO_REQUEST_THRESHOLD = "1000000"
+DO_WALLTIME_HOURS_THRESHOLD = "100"
+WORKER_REQUEST_THRESHOLD = "10000000"
+
+# Secrets (set via wrangler secret put):
+# GUARDIAN_API_KEY    — API key from Guardian dashboard for authenticating reports
+# CLOUDFLARE_API_TOKEN — Customer's CF API token (stays in their account, never sent to us)
+# CLOUDFLARE_ACCOUNT_ID — Customer's CF account ID

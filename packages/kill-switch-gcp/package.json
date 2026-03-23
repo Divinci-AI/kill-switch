@@ -1,0 +1,11 @@
+{
+  "name": "gcp-billing-kill-switch",
+  "version": "1.0.0",
+  "description": "Selectively disable GCP Cloud Run services when spending exceeds budget thresholds. Pages PagerDuty until acknowledged.",
+  "main": "index.js",
+  "license": "MIT",
+  "dependencies": {
+    "@google-cloud/billing": "^4.0.0",
+    "@google-cloud/run": "^1.0.0"
+  }
+}

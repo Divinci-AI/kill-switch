@@ -1,0 +1,31 @@
+{
+  "name": "cloudflare-billing-kill-switch",
+  "version": "1.0.0",
+  "description": "Auto-disconnect runaway Cloudflare Workers before they generate surprise bills. Born from an $80K Durable Objects bill.",
+  "keywords": [
+    "cloudflare",
+    "workers",
+    "billing",
+    "kill-switch",
+    "cost-protection",
+    "durable-objects",
+    "monitoring"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AiExpanse/cloudflare-billing-kill-switch"
+  },
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "check": "curl -s https://cloudflare-billing-kill-switch.<your-subdomain>.workers.dev/check | jq",
+    "usage": "curl -s https://cloudflare-billing-kill-switch.<your-subdomain>.workers.dev/usage | jq",
+    "test-alert": "curl -s https://cloudflare-billing-kill-switch.<your-subdomain>.workers.dev/test-alert | jq"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0",
+    "typescript": "^5.0.0",
+    "@cloudflare/workers-types": "^4.0.0"
+  }
+}
