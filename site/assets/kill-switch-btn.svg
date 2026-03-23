@@ -35,7 +35,7 @@
     <!-- Highlight -->
     <ellipse cx="100" cy="85" rx="30" ry="15" fill="rgba(255,255,255,0.08)"/>
     <!-- Power icon -->
-    <g class="label" transform="translate(100, 95)">
+    <g class="label" transform="translate(100, 100)">
       <line x1="0" y1="-22" x2="0" y2="-8" stroke="white" stroke-width="4" stroke-linecap="round"/>
       <path d="M -15 -15 A 20 20 0 1 0 15 -15" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
     </g>

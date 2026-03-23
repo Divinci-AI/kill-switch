@@ -1,5 +1,5 @@
 /**
- * Cloud Switch — Edge Agent
+ * Kill Switch — Edge Agent
  *
  * A lightweight Cloudflare Worker that runs IN the customer's account.
  * Their API token never leaves their infrastructure.
@@ -88,7 +88,7 @@ async function queryUsage(env: Env): Promise<{ doServices: any[]; workerServices
   };
 }
 
-// ─── Local Cloud Switch ──────────────────────────────────────────────────────
+// ─── Local Kill Switch ──────────────────────────────────────────────────────
 
 async function disconnectWorker(env: Env, scriptName: string): Promise<string> {
   const baseUrl = `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}`;

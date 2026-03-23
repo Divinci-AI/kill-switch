@@ -2,7 +2,7 @@
   "name": "guardian-agent",
   "version": "1.0.0",
   "private": true,
-  "description": "Cloud Switch edge agent — runs in your Cloudflare account, reports to Guardian API",
+  "description": "Kill Switch edge agent — runs in your Cloudflare account, reports to Guardian API",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"

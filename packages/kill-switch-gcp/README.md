@@ -1,4 +1,4 @@
-# GCP Billing Cloud Switch
+# GCP Billing Kill Switch
 
 **Selectively disable GCP Cloud Run services when spending exceeds budget thresholds.**
 
@@ -45,7 +45,7 @@ gcloud pubsub topics create billing-alerts --project=YOUR_PROJECT_ID
 ```bash
 gcloud billing budgets create \
   --billing-account=YOUR_BILLING_ACCOUNT_ID \
-  --display-name="GCP Cloud Switch Budget" \
+  --display-name="GCP Kill Switch Budget" \
   --budget-amount=500 \
   --threshold-rule=percent=0.5,basis=current-spend \
   --threshold-rule=percent=0.8,basis=current-spend \
@@ -97,11 +97,11 @@ Services listed in `PROTECTED_SERVICES` will never be scaled down, even when the
 PROTECTED_SERVICES=my-api;my-webhook-handler
 ```
 
-## Part of Cloud Switch
+## Part of Kill Switch
 
-This is the GCP component of the [Cloud Switch](https://github.com/Divinci-AI/cloudflare-billing-kill-switch) project. See also:
+This is the GCP component of the [Kill Switch](https://github.com/Divinci-AI/cloudflare-billing-kill-switch) project. See also:
 
-- [Cloudflare Billing Cloud Switch](https://github.com/Divinci-AI/cloudflare-billing-kill-switch) — auto-disconnect runaway Cloudflare Workers
+- [Cloudflare Billing Kill Switch](https://github.com/Divinci-AI/cloudflare-billing-kill-switch) — auto-disconnect runaway Cloudflare Workers
 
 ## License
 

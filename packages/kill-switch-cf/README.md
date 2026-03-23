@@ -1,4 +1,4 @@
-# Cloudflare Billing Cloud Switch
+# Cloudflare Billing Kill Switch
 
 **Auto-disconnect runaway Cloudflare Workers before they generate surprise bills.**
 

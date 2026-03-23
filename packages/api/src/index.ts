@@ -1,5 +1,5 @@
 /**
- * Cloud Switch API
+ * Kill Switch API
  *
  * Express server that monitors cloud spending and auto-kills runaway services.
  * Born from a $91K Cloudflare Durable Objects bill.
@@ -148,7 +148,7 @@ app.get("/docs/openapi.json", (_req, res) => res.json(openApiSpec));
 app.get("/docs", (_req, res) => {
   res.setHeader("Content-Type", "text/html");
   res.send(`<!DOCTYPE html>
-<html><head><title>Cloud Switch API Docs</title>
+<html><head><title>Kill Switch API Docs</title>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 </head><body>
 <script id="api-reference" data-url="/docs/openapi.json" data-configuration='${JSON.stringify({
@@ -156,7 +156,7 @@ app.get("/docs", (_req, res) => {
   layout: "modern",
   darkMode: true,
   hiddenClients: ["node"],
-  metaData: { title: "Cloud Switch API" },
+  metaData: { title: "Kill Switch API" },
 })}'></script>
 <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
 </body></html>`);
@@ -284,7 +284,7 @@ const PORT = parseInt(process.env.PORT || "8090");
   }
 
   app.listen(PORT, () => {
-    console.error(`[guardian] Cloud Switch API listening on port ${PORT}`);
+    console.error(`[guardian] Kill Switch API listening on port ${PORT}`);
     console.error(`[guardian] Check schedule: ${CHECK_CRON}`);
     console.error(`[guardian] Providers: ${getAllProviders().map(p => p.name).join(", ")}`);
   });

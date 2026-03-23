@@ -125,7 +125,7 @@ async function queryWorkerUsage(token: string, accountId: string): Promise<Servi
   });
 }
 
-// ─── Cloud Switch Actions ────────────────────────────────────────────────────
+// ─── Kill Switch Actions ────────────────────────────────────────────────────
 
 async function disconnectWorker(token: string, accountId: string, scriptName: string): Promise<ActionResult> {
   const actions: string[] = [];

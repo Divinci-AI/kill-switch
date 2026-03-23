@@ -282,7 +282,7 @@ describe("E2E: Alert Channels", () => {
   });
 });
 
-describe("E2E: Cloud Switch Rules", () => {
+describe("E2E: Kill Switch Rules", () => {
   it("GET /rules/presets lists available presets", async () => {
     const res = await request(app).get("/rules/presets");
     expect(res.status).toBe(200);
@@ -354,7 +354,7 @@ describe("E2E: Cloud Switch Rules", () => {
   });
 });
 
-describe("E2E: Database Cloud Switch", () => {
+describe("E2E: Database Kill Switch", () => {
   it("POST /database/kill initiates a sequence", async () => {
     const res = await request(app)
       .post("/database/kill")

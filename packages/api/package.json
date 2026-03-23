@@ -2,7 +2,7 @@
   "name": "guardian-api",
   "version": "0.1.0",
   "private": true,
-  "description": "Cloud Switch API — monitor cloud spending, auto-kill runaway services",
+  "description": "Kill Switch API — monitor cloud spending, auto-kill runaway services",
   "type": "module",
   "scripts": {
     "test": "vitest run",

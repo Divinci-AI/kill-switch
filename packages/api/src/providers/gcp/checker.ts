@@ -208,7 +208,7 @@ async function checkSecurityMetrics(
   return events;
 }
 
-// ─── Cloud Switch Actions ────────────────────────────────────────────────────
+// ─── Kill Switch Actions ────────────────────────────────────────────────────
 
 async function scaleDownService(
   accessToken: string, projectId: string, region: string, serviceName: string

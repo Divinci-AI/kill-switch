@@ -91,7 +91,7 @@ async function alertPagerDuty(channel: AlertChannel, summary: string, severity: 
         class: "billing",
         custom_details: details,
       },
-      client: "Cloud Switch",
+      client: "Kill Switch",
     }),
   });
 

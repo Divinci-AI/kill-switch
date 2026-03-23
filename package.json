@@ -1,12 +1,12 @@
 {
-  "name": "cloud-switch",
+  "name": "kill-switch",
   "version": "0.1.0",
   "private": true,
   "description": "Monitor cloud spending, auto-kill runaway services, protect your infrastructure. Born from a $91K Cloudflare bill.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/AiExpanse/cloud-switch"
+    "url": "https://github.com/AiExpanse/kill-switch"
   },
   "workspaces": [
     "packages/*"
@@ -18,7 +18,7 @@
     "build:api": "cd packages/api && npm run build",
     "build:web": "cd packages/web && npm run build",
     "deploy:api": "cd packages/api && npm run deploy",
-    "deploy:cloud-switch": "cd packages/cloud-switch-cf && npm run deploy",
+    "deploy:kill-switch": "cd packages/kill-switch-cf && npm run deploy",
     "deploy:agent": "cd packages/agent && npm run deploy"
   }
 }
