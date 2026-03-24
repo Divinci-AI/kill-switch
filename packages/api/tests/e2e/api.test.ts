@@ -95,6 +95,7 @@ vi.mock("../../src/providers/index.js", () => ({
   getAllProviders: vi.fn(() => [
     { id: "cloudflare", name: "Cloudflare", getDefaultThresholds: () => ({ doRequestsPerDay: 1000000 }) },
     { id: "gcp", name: "Google Cloud Platform", getDefaultThresholds: () => ({ monthlySpendLimitUSD: 500 }) },
+    { id: "aws", name: "Amazon Web Services", getDefaultThresholds: () => ({ ec2InstanceCount: 20, monthlySpendLimitUSD: 3000 }) },
   ]),
 }));
 
@@ -103,6 +104,20 @@ vi.mock("../../src/globals/index.js", () => ({
   recordAlert: vi.fn(),
   getUsageHistory: vi.fn(async () => []),
   getAlertHistory: vi.fn(async () => []),
+  getAnalyticsOverview: vi.fn(async () => ({
+    dailyCosts: [
+      { date: "2026-03-20", cost: 25.5, services: 3, violations: 0 },
+      { date: "2026-03-21", cost: 30.0, services: 3, violations: 1 },
+    ],
+    totalSpendPeriod: 55.5,
+    avgDailyCost: 27.75,
+    projectedMonthlyCost: 832.5,
+    savingsEstimate: 150,
+    killSwitchActions: 1,
+    accountBreakdown: [
+      { cloudAccountId: "cf-1", provider: "cloudflare", totalCost: 55.5, avgDailyCost: 27.75 },
+    ],
+  })),
 }));
 
 vi.mock("jose", () => ({
@@ -122,6 +137,7 @@ let app: Express;
 beforeAll(() => {
   process.env.NODE_ENV = "test";
   process.env.ENVIRONMENT = "local";
+  process.env.GUARDIAN_DEV_AUTH_BYPASS = "true";
   app = createApp();
 });
 
@@ -131,20 +147,23 @@ describe("E2E: Public Endpoints", () => {
     expect(res.status).toBe(200);
     expect(res.body.service).toBe("kill-switch");
     expect(res.body.status).toBe("healthy");
-    expect(res.body.providers).toHaveLength(2);
+    expect(res.body.providers).toHaveLength(3);
   });
 
-  it("GET /providers lists CF and GCP", async () => {
+  it("GET /providers lists CF, GCP, and AWS", async () => {
     const res = await request(app).get("/providers");
     expect(res.status).toBe(200);
-    expect(res.body.providers).toHaveLength(2);
+    expect(res.body.providers).toHaveLength(3);
     expect(res.body.providers[0].id).toBe("cloudflare");
     expect(res.body.providers[1].id).toBe("gcp");
+    expect(res.body.providers[2].id).toBe("aws");
   });
 
   it("POST /providers/cloudflare/validate validates credentials", async () => {
     const res = await request(app)
       .post("/providers/cloudflare/validate")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user")
       .send({ provider: "cloudflare", apiToken: "test", accountId: "test" });
     expect(res.status).toBe(200);
     expect(res.body.valid).toBe(true);
@@ -156,6 +175,8 @@ describe("E2E: Public Endpoints", () => {
 
     const res = await request(app)
       .post("/providers/unknown/validate")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user")
       .send({});
     expect(res.status).toBe(404);
   });
@@ -164,7 +185,7 @@ describe("E2E: Public Endpoints", () => {
     const res = await request(app).get("/docs/openapi.json");
     expect(res.status).toBe(200);
     expect(res.body.openapi).toBe("3.1.0");
-    expect(res.body.info.title).toContain("Guardian");
+    expect(res.body.info.title).toContain("Kill Switch");
   });
 });
 
@@ -198,7 +219,9 @@ describe("E2E: Account Management", () => {
   it("POST /accounts creates a new account", async () => {
     const res = await request(app)
       .post("/accounts")
-      .send({ name: "Test Corp", ownerUserId: "user-001" });
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "user-001")
+      .send({ name: "Test Corp" });
     expect(res.status).toBe(201);
     expect(res.body.name).toBe("Test Corp");
     expect(res.body.tier).toBe("free");
@@ -207,12 +230,18 @@ describe("E2E: Account Management", () => {
   it("POST /accounts returns existing account for same user", async () => {
     const res = await request(app)
       .post("/accounts")
-      .send({ name: "Test Corp Again", ownerUserId: "user-001" });
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "user-001")
+      .send({ name: "Test Corp Again" });
     expect(res.body.existing).toBe(true);
   });
 
   it("POST /accounts rejects missing fields", async () => {
-    const res = await request(app).post("/accounts").send({});
+    const res = await request(app)
+      .post("/accounts")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "user-002")
+      .send({});
     expect(res.status).toBe(400);
   });
 });
@@ -290,6 +319,15 @@ describe("E2E: Kill Switch Rules", () => {
     expect(res.body.presets.length).toBeGreaterThanOrEqual(5);
   });
 
+  it("GET /rules/presets includes all 8 presets", async () => {
+    const res = await request(app).get("/rules/presets");
+    expect(res.body.presets).toHaveLength(8);
+    const ids = res.body.presets.map((p: any) => p.id);
+    expect(ids).toContain("gpu-runaway");
+    expect(ids).toContain("lambda-loop");
+    expect(ids).toContain("aws-cost-runaway");
+  });
+
   it("POST /rules/presets/:id applies a preset", async () => {
     const res = await request(app)
       .post("/rules/presets/ddos")
@@ -297,6 +335,44 @@ describe("E2E: Kill Switch Rules", () => {
       .send({ requestsPerMinute: 10000 });
     expect(res.status).toBe(201);
     expect(res.body.rule.name).toContain("DDoS");
+  });
+
+  it("POST /rules/presets/gpu-runaway applies GPU preset", async () => {
+    const res = await request(app)
+      .post("/rules/presets/gpu-runaway")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user")
+      .send({ maxGPUInstances: 2 });
+    expect(res.status).toBe(201);
+    expect(res.body.rule.name).toContain("GPU");
+    expect(res.body.rule.actions[0].type).toBe("stop-instances");
+  });
+
+  it("POST /rules/presets/lambda-loop applies Lambda preset", async () => {
+    const res = await request(app)
+      .post("/rules/presets/lambda-loop")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user")
+      .send({ maxConcurrency: 200 });
+    expect(res.status).toBe(201);
+    expect(res.body.rule.name).toContain("Lambda");
+    expect(res.body.rule.actions[0].type).toBe("throttle-lambda");
+  });
+
+  it("POST /rules/presets/aws-cost-runaway applies AWS cost preset", async () => {
+    const res = await request(app)
+      .post("/rules/presets/aws-cost-runaway")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user")
+      .send({ dailyCostUSD: 500 });
+    expect(res.status).toBe(201);
+    expect(res.body.rule.name).toContain("AWS");
+    expect(res.body.rule.conditions[0].value).toBe(500);
+  });
+
+  it("POST /rules/presets/unknown returns 404", async () => {
+    const res = await request(app)
+      .post("/rules/presets/nonexistent")
+      .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user")
+      .send({});
+    expect(res.status).toBe(404);
   });
 
   it("POST /rules creates custom rule", async () => {
@@ -424,5 +500,80 @@ describe("E2E: Agent Report", () => {
       .post("/agent/report")
       .send({ accountId: "test" });
     expect(res.status).toBe(401);
+  });
+});
+
+describe("E2E: Analytics Overview", () => {
+  it("GET /analytics/overview requires authentication", async () => {
+    const res = await request(app).get("/analytics/overview");
+    expect(res.status).toBe(401);
+  });
+
+  it("GET /analytics/overview returns analytics with auth", async () => {
+    const res = await request(app)
+      .get("/analytics/overview")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user");
+    expect(res.status).toBe(200);
+    expect(res.body.dailyCosts).toBeDefined();
+    expect(res.body.dailyCosts).toHaveLength(2);
+    expect(res.body.totalSpendPeriod).toBe(55.5);
+    expect(res.body.projectedMonthlyCost).toBe(832.5);
+    expect(res.body.savingsEstimate).toBe(150);
+    expect(res.body.killSwitchActions).toBe(1);
+    expect(res.body.accountBreakdown).toHaveLength(1);
+  });
+
+  it("GET /analytics/overview passes days query param", async () => {
+    const { getAnalyticsOverview } = await import("../../src/globals/index.js");
+
+    const res = await request(app)
+      .get("/analytics/overview?days=7")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user");
+    expect(res.status).toBe(200);
+    expect(vi.mocked(getAnalyticsOverview)).toHaveBeenCalledWith("test-account", 7);
+  });
+
+  it("GET /analytics/overview defaults to 30 days", async () => {
+    const { getAnalyticsOverview } = await import("../../src/globals/index.js");
+
+    const res = await request(app)
+      .get("/analytics/overview")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user");
+    expect(res.status).toBe(200);
+    expect(vi.mocked(getAnalyticsOverview)).toHaveBeenCalledWith("test-account", 30);
+  });
+
+  it("GET /analytics/overview response has correct shape", async () => {
+    const res = await request(app)
+      .get("/analytics/overview")
+      .set("X-Guardian-Account-Id", "test-account")
+      .set("X-Guardian-User-Id", "test-user");
+
+    const body = res.body;
+    // Verify all expected fields exist with correct types
+    expect(typeof body.totalSpendPeriod).toBe("number");
+    expect(typeof body.avgDailyCost).toBe("number");
+    expect(typeof body.projectedMonthlyCost).toBe("number");
+    expect(typeof body.savingsEstimate).toBe("number");
+    expect(typeof body.killSwitchActions).toBe("number");
+    expect(Array.isArray(body.dailyCosts)).toBe(true);
+    expect(Array.isArray(body.accountBreakdown)).toBe(true);
+
+    // Verify daily cost entry shape
+    const day = body.dailyCosts[0];
+    expect(day).toHaveProperty("date");
+    expect(day).toHaveProperty("cost");
+    expect(day).toHaveProperty("services");
+    expect(day).toHaveProperty("violations");
+
+    // Verify breakdown entry shape
+    const acct = body.accountBreakdown[0];
+    expect(acct).toHaveProperty("cloudAccountId");
+    expect(acct).toHaveProperty("provider");
+    expect(acct).toHaveProperty("totalCost");
+    expect(acct).toHaveProperty("avgDailyCost");
   });
 });

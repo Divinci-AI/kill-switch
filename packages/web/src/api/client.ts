@@ -77,6 +77,10 @@ export const api = {
   getUsageHistory: (id: string, days = 7) =>
     guardianFetch<any>(`/cloud-accounts/${id}/usage?days=${days}`),
 
+  // Analytics
+  getAnalyticsOverview: (days = 30) =>
+    guardianFetch<any>(`/analytics/overview?days=${days}`),
+
   // Alerts
   listAlertChannels: () => guardianFetch<any>("/alerts/channels"),
   updateAlertChannels: (channels: any[]) =>

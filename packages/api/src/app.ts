@@ -19,7 +19,7 @@ import { GuardianAccountModel } from "./models/guardian-account/schema.js";
 import { requireAuth, resolveGuardianAccount } from "./middleware/auth.js";
 import { runCheckCycle } from "./services/monitoring-engine.js";
 import { openApiSpec } from "./routes/docs/openapi.js";
-import { getUsageHistory, getAlertHistory } from "./globals/index.js";
+import { getUsageHistory, getAlertHistory, getAnalyticsOverview } from "./globals/index.js";
 
 export function createApp() {
   const app = express();
@@ -94,6 +94,9 @@ export function createApp() {
         { id: "cost-runaway", name: "Cost Runaway Protection", description: "Disconnect workers exceeding daily cost limit", category: "cost" },
         { id: "error-storm", name: "Error Storm Protection", description: "Scale down on sustained high error rate", category: "reliability" },
         { id: "exfiltration", name: "Data Exfiltration Detection", description: "Isolate services with unusual egress", category: "security" },
+        { id: "gpu-runaway", name: "GPU Instance Runaway", description: "Stop unexpected GPU instances (crypto mining, leaked keys)", category: "cost" },
+        { id: "lambda-loop", name: "Lambda Recursive Loop", description: "Throttle Lambda functions with runaway concurrency", category: "cost" },
+        { id: "aws-cost-runaway", name: "AWS Daily Cost Runaway", description: "Emergency stop when daily AWS spend spikes", category: "cost" },
       ],
     });
   });
@@ -128,14 +131,9 @@ export function createApp() {
   // Manual check (requires auth — runs only the authenticated user's accounts)
   app.post("/check", requireAuth, resolveGuardianAccount, async (req, res, next) => {
     try {
-      const results = await runCheckCycle();
-      // Filter to only this user's results
       const guardianAccountId = (req as any).guardianAccountId;
-      const userResults = results.filter((r: any) => {
-        // In production, scope to user's accounts only
-        return true; // TODO: filter by guardianAccountId when monitoring engine supports it
-      });
-      res.json({ status: "checked", results: userResults, timestamp: new Date().toISOString() });
+      const results = await runCheckCycle(guardianAccountId);
+      res.json({ status: "checked", results, timestamp: new Date().toISOString() });
     } catch (e) { next(e); }
   });
 
@@ -159,6 +157,15 @@ export function createApp() {
       // Strip sensitive fields
       const { stripeCustomerId: _s, ...safe } = account as any;
       res.json(safe);
+    } catch (e) { next(e); }
+  });
+
+  // Analytics overview (aggregate FinOps data across all accounts)
+  app.get("/analytics/overview", requireAuth, resolveGuardianAccount, async (req: any, res, next) => {
+    try {
+      const days = parseInt(req.query.days as string) || 30;
+      const overview = await getAnalyticsOverview(req.guardianAccountId, days);
+      res.json(overview);
     } catch (e) { next(e); }
   });
 

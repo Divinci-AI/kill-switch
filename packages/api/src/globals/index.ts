@@ -174,6 +174,125 @@ export async function getUsageHistory(
 }
 
 /**
+ * Get aggregate analytics across all cloud accounts for a guardian account.
+ * Returns daily cost totals, projected monthly spend, and savings from kill switch actions.
+ */
+export async function getAnalyticsOverview(
+  guardianAccountId: string,
+  days: number = 30
+): Promise<{
+  dailyCosts: { date: string; cost: number; services: number; violations: number }[];
+  totalSpendPeriod: number;
+  avgDailyCost: number;
+  projectedMonthlyCost: number;
+  savingsEstimate: number;
+  killSwitchActions: number;
+  accountBreakdown: { cloudAccountId: string; provider: string; totalCost: number; avgDailyCost: number }[];
+}> {
+  const pool = getPostgresPool();
+
+  // Daily aggregated costs across all accounts.
+  // Subquery deduplicates per account per day (MAX within each account)
+  // so high-frequency checks (5-min intervals) don't inflate totals.
+  const dailyResult = await pool.query(
+    `SELECT date, SUM(account_cost) AS cost, SUM(account_services) AS services, SUM(account_violations) AS violations
+     FROM (
+       SELECT
+         DATE(checked_at) AS date,
+         cloud_account_id,
+         MAX(estimated_daily_cost_usd) AS account_cost,
+         MAX(total_services) AS account_services,
+         COUNT(*) FILTER (WHERE array_length(violations, 1) > 0) AS account_violations
+       FROM guardian_usage_snapshots
+       WHERE guardian_account_id = $1
+         AND checked_at >= NOW() - INTERVAL '1 day' * $2
+       GROUP BY DATE(checked_at), cloud_account_id
+     ) per_account
+     GROUP BY date
+     ORDER BY date ASC`,
+    [guardianAccountId, days]
+  );
+
+  const dailyCosts = dailyResult.rows.map((r: any) => ({
+    date: r.date,
+    cost: parseFloat(r.cost) || 0,
+    services: parseInt(r.services) || 0,
+    violations: parseInt(r.violations) || 0,
+  }));
+
+  const totalSpendPeriod = dailyCosts.reduce((sum, d) => sum + d.cost, 0);
+  const daysWithData = dailyCosts.length || 1;
+  const avgDailyCost = totalSpendPeriod / daysWithData;
+  const projectedMonthlyCost = avgDailyCost * 30;
+
+  // Count kill switch actions and estimate savings.
+  // Deduplicate per account per day to avoid inflating from high-frequency checks.
+  const actionsResult = await pool.query(
+    `SELECT
+       COUNT(*) AS action_count,
+       SUM(daily_cost_at_action) AS cost_at_action
+     FROM (
+       SELECT
+         DATE(checked_at) AS date,
+         cloud_account_id,
+         MAX(estimated_daily_cost_usd) AS daily_cost_at_action
+       FROM guardian_usage_snapshots
+       WHERE guardian_account_id = $1
+         AND checked_at >= NOW() - INTERVAL '1 day' * $2
+         AND array_length(actions_taken, 1) > 0
+       GROUP BY DATE(checked_at), cloud_account_id
+     ) action_days`,
+    [guardianAccountId, days]
+  );
+
+  const killSwitchActions = parseInt(actionsResult.rows[0]?.action_count) || 0;
+  // Conservative savings estimate: daily cost at time of action × 3 days (would have continued)
+  const costAtAction = parseFloat(actionsResult.rows[0]?.cost_at_action) || 0;
+  const savingsEstimate = costAtAction * 3;
+
+  // Per-account breakdown.
+  // Deduplicate per day first so check frequency doesn't inflate totals.
+  const breakdownResult = await pool.query(
+    `SELECT
+       cloud_account_id,
+       provider,
+       SUM(daily_cost) AS total_cost,
+       AVG(daily_cost) AS avg_daily_cost
+     FROM (
+       SELECT
+         cloud_account_id,
+         provider,
+         DATE(checked_at) AS date,
+         MAX(estimated_daily_cost_usd) AS daily_cost
+       FROM guardian_usage_snapshots
+       WHERE guardian_account_id = $1
+         AND checked_at >= NOW() - INTERVAL '1 day' * $2
+       GROUP BY cloud_account_id, provider, DATE(checked_at)
+     ) daily
+     GROUP BY cloud_account_id, provider
+     ORDER BY total_cost DESC`,
+    [guardianAccountId, days]
+  );
+
+  const accountBreakdown = breakdownResult.rows.map((r: any) => ({
+    cloudAccountId: r.cloud_account_id,
+    provider: r.provider,
+    totalCost: parseFloat(r.total_cost) || 0,
+    avgDailyCost: parseFloat(r.avg_daily_cost) || 0,
+  }));
+
+  return {
+    dailyCosts,
+    totalSpendPeriod,
+    avgDailyCost,
+    projectedMonthlyCost,
+    savingsEstimate,
+    killSwitchActions,
+    accountBreakdown,
+  };
+}
+
+/**
  * Get alert history for a guardian account
  */
 export async function getAlertHistory(
