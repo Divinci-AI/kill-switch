@@ -513,7 +513,7 @@ describe("E2E: Kill Switch Rules", () => {
 });
 
 describe("E2E: Database Kill Switch", () => {
-  it("POST /database/kill initiates a sequence", async () => {
+  it("POST /database/kill rejects raw credentials (must use credentialId)", async () => {
     const res = await request(app)
       .post("/database/kill")
       .set("X-Guardian-Account-Id", "test-account").set("X-Guardian-User-Id", "test-user")
@@ -521,9 +521,8 @@ describe("E2E: Database Kill Switch", () => {
         credential: { provider: "mongodb-atlas", atlasPublicKey: "pk", atlasPrivateKey: "sk", atlasProjectId: "p", clusterName: "c" },
         trigger: "compromise-detected",
       });
-    expect(res.status).toBe(201);
-    expect(res.body.sequenceId).toMatch(/^dbkill-/);
-    expect(res.body.steps).toHaveLength(4);
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/credentialId/);
   });
 
   it("POST /database/kill rejects missing fields", async () => {
@@ -561,10 +560,11 @@ describe("E2E: Billing", () => {
 });
 
 describe("E2E: Agent Report", () => {
-  it("POST /agent/report accepts metrics with API key", async () => {
+  it("POST /agent/report accepts metrics with valid API key", async () => {
+    process.env.GUARDIAN_AGENT_API_KEY = "test-agent-key";
     const res = await request(app)
       .post("/agent/report")
-      .set("Authorization", "Bearer agent-api-key-123")
+      .set("Authorization", "Bearer test-agent-key")
       .send({
         accountId: "cf-acc-123",
         checkedAt: Date.now(),
@@ -575,6 +575,26 @@ describe("E2E: Agent Report", () => {
       });
     expect(res.status).toBe(200);
     expect(res.body.received).toBe(true);
+    delete process.env.GUARDIAN_AGENT_API_KEY;
+  });
+
+  it("POST /agent/report rejects invalid API key", async () => {
+    process.env.GUARDIAN_AGENT_API_KEY = "real-key";
+    const res = await request(app)
+      .post("/agent/report")
+      .set("Authorization", "Bearer wrong-key")
+      .send({ accountId: "test" });
+    expect(res.status).toBe(403);
+    delete process.env.GUARDIAN_AGENT_API_KEY;
+  });
+
+  it("POST /agent/report returns 503 when key not configured", async () => {
+    delete process.env.GUARDIAN_AGENT_API_KEY;
+    const res = await request(app)
+      .post("/agent/report")
+      .set("Authorization", "Bearer any-key")
+      .send({ accountId: "test" });
+    expect(res.status).toBe(503);
   });
 
   it("POST /agent/report rejects without API key", async () => {

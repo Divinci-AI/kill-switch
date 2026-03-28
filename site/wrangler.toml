@@ -1,0 +1,7 @@
+name = "cloud-switch-site"
+compatibility_date = "2024-09-23"
+pages_build_output_dir = "./public"
+
+# Custom domains configured via CF Pages:
+#   kill-switch.net
+#   www.kill-switch.net

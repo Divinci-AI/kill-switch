@@ -78,9 +78,7 @@ PROTECTED_WORKERS = "cloudflare-billing-kill-switch,divinci-agent-stage,divinci-
 PROTECTED_RESOURCES = ""
 
 # ── Secrets ──────────────────────────────────────────────────────────────────
-# Set these via `wrangler secret put <NAME>`
-#
-# REQUIRED:
+# REQUIRED (set via `wrangler secret put <NAME>`):
 #   CLOUDFLARE_API_TOKEN    — API token with permissions:
 #                             - Account Analytics: Read
 #                             - Account Workers Scripts: Edit (for auto-disconnect)
@@ -93,3 +91,13 @@ PROTECTED_RESOURCES = ""
 #   DISCORD_WEBHOOK_URL     — Discord channel webhook URL
 #   SLACK_WEBHOOK_URL       — Slack incoming webhook URL
 #   CUSTOM_WEBHOOK_URL      — Any HTTP endpoint that accepts POST JSON
+#
+# Secrets Store bindings (account-level, shared with Zombay)
+[[secrets_store_secrets]]
+binding = "PAGERDUTY_ROUTING_KEY"
+store_id = "0b7ac993cf26413ea6e2f1b5ede20b25"
+secret_name = "PAGERDUTY_ROUTING_KEY"
+
+# NOTE: For new deployments, consider migrating secrets to the Cloudflare
+# Secrets Store (store_id: 0b7ac993cf26413ea6e2f1b5ede20b25) for centralized
+# management. Bind via [[secrets_store_secrets]] in wrangler.toml.

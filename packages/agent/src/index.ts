@@ -18,11 +18,15 @@
  * - Guardian API key authenticates the metric reports
  */
 
+interface SecretStoreSecret {
+  get(): Promise<string>;
+}
+
 interface Env {
   CLOUDFLARE_API_TOKEN: string;
   CLOUDFLARE_ACCOUNT_ID: string;
   GUARDIAN_API_URL: string;
-  GUARDIAN_API_KEY: string;
+  GUARDIAN_API_KEY: SecretStoreSecret;
   DO_REQUEST_THRESHOLD: string;
   DO_WALLTIME_HOURS_THRESHOLD: string;
   WORKER_REQUEST_THRESHOLD: string;
@@ -124,11 +128,12 @@ async function reportToGuardian(env: Env, result: CheckResult): Promise<void> {
   if (!env.GUARDIAN_API_KEY || !env.GUARDIAN_API_URL) return;
 
   try {
+    const apiKey = await env.GUARDIAN_API_KEY.get();
     await fetch(`${env.GUARDIAN_API_URL}/agent/report`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${env.GUARDIAN_API_KEY}`,
+        "Authorization": `Bearer ${apiKey}`,
         "X-Guardian-Agent": "cloudflare-edge",
       },
       body: JSON.stringify(result),
@@ -230,8 +235,12 @@ export default {
 
     // Auth: require GUARDIAN_API_KEY for non-health endpoints
     if (url.pathname !== "/") {
+      if (!env.GUARDIAN_API_KEY) {
+        return Response.json({ error: "API key not configured" }, { status: 503 });
+      }
+      const apiKey = await env.GUARDIAN_API_KEY.get();
       const authHeader = request.headers.get("Authorization");
-      if (env.GUARDIAN_API_KEY && authHeader !== `Bearer ${env.GUARDIAN_API_KEY}`) {
+      if (!apiKey || authHeader !== `Bearer ${apiKey}`) {
         return Response.json({ error: "Unauthorized" }, { status: 401 });
       }
     }

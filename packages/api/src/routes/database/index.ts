@@ -77,14 +77,12 @@ databaseRouter.delete("/credentials/:id", async (req: any, res, next) => {
 /**
  * POST /database/kill — Initiate a database kill sequence
  * Body: { credentialId, trigger, actions? }
- *   OR: { credential, trigger, actions? }  (legacy — still supported but deprecated)
  */
 databaseRouter.post("/kill", async (req: any, res, next) => {
   try {
     const guardianAccountId = req.guardianAccountId;
-    const { credentialId, credential: rawCredential, trigger, actions } = req.body as {
+    const { credentialId, trigger, actions } = req.body as {
       credentialId?: string;
-      credential?: DatabaseCredential;
       trigger: string;
       actions?: DatabaseKillAction[];
     };
@@ -95,17 +93,13 @@ databaseRouter.post("/kill", async (req: any, res, next) => {
 
     let credential: DatabaseCredential;
 
-    if (credentialId) {
-      // Preferred: decrypt stored credential
-      const decrypted = await getGenericCredential(credentialId);
-      if (!decrypted) return res.status(404).json({ error: "Credential not found" });
-      credential = decrypted as DatabaseCredential;
-    } else if (rawCredential?.provider) {
-      // Legacy: raw credential in body (deprecated)
-      credential = rawCredential;
-    } else {
-      return res.status(400).json({ error: "Missing credentialId or credential.provider" });
+    if (!credentialId) {
+      return res.status(400).json({ error: "Missing credentialId. Store credentials first via POST /database/credentials" });
     }
+
+    const decrypted = await getGenericCredential(credentialId);
+    if (!decrypted) return res.status(404).json({ error: "Credential not found" });
+    credential = decrypted as DatabaseCredential;
 
     const sequence = initiateKillSequence(credential, trigger, actions);
     (sequence as any).guardianAccountId = guardianAccountId;
@@ -121,8 +115,7 @@ databaseRouter.post("/kill", async (req: any, res, next) => {
 
 /**
  * POST /database/kill/:id/advance — Execute the next step
- * Body: { credentialId, humanApproval? }
- *   OR: { credential, humanApproval? }  (legacy)
+ * Body: { credentialId?, humanApproval? }
  */
 databaseRouter.post("/kill/:id/advance", async (req: any, res, next) => {
   try {
@@ -134,16 +127,15 @@ databaseRouter.post("/kill/:id/advance", async (req: any, res, next) => {
       return res.status(403).json({ error: "Not authorized to advance this sequence" });
     }
 
-    const { credentialId, credential: rawCredential, humanApproval } = req.body;
+    const { credentialId, humanApproval } = req.body;
 
-    let credential: DatabaseCredential | undefined;
-    if (credentialId) {
-      const decrypted = await getGenericCredential(credentialId);
-      if (!decrypted) return res.status(404).json({ error: "Credential not found" });
-      credential = decrypted as DatabaseCredential;
-    } else if (rawCredential) {
-      credential = rawCredential;
+    if (!credentialId) {
+      return res.status(400).json({ error: "Missing credentialId. Store credentials first via POST /database/credentials" });
     }
+
+    const decrypted = await getGenericCredential(credentialId);
+    if (!decrypted) return res.status(404).json({ error: "Credential not found" });
+    const credential = decrypted as DatabaseCredential;
 
     const updated = await advanceKillSequence(req.params.id, credential, humanApproval);
 

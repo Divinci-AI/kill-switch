@@ -22,13 +22,18 @@ crons = ["*/5 * * * *"]
 
 [vars]
 # Guardian API endpoint where metrics are reported
-GUARDIAN_API_URL = "https://guardian-api-150038457816.us-central1.run.app"
+GUARDIAN_API_URL = "https://api.kill-switch.net"
 # Check thresholds (can be overridden per deployment)
 DO_REQUEST_THRESHOLD = "1000000"
 DO_WALLTIME_HOURS_THRESHOLD = "100"
 WORKER_REQUEST_THRESHOLD = "10000000"
 
+# Secrets Store bindings (account-level secret management)
+[[secrets_store_secrets]]
+binding = "GUARDIAN_API_KEY"
+store_id = "0b7ac993cf26413ea6e2f1b5ede20b25"
+secret_name = "GUARDIAN_AGENT_API_KEY"
+
 # Secrets (set via wrangler secret put):
-# GUARDIAN_API_KEY    — API key from Guardian dashboard for authenticating reports
 # CLOUDFLARE_API_TOKEN — Customer's CF API token (stays in their account, never sent to us)
 # CLOUDFLARE_ACCOUNT_ID — Customer's CF account ID

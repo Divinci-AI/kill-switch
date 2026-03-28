@@ -28,7 +28,13 @@ export function createApp() {
   // CORS — always use explicit allowlist (never open wildcard)
   const defaultOrigins = process.env.NODE_ENV === "test"
     ? ["http://localhost:3000"]
-    : ["http://localhost:3000", "http://localhost:5173"];
+    : [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "https://kill-switch.net",
+        "https://www.kill-switch.net",
+        "https://app.kill-switch.net",
+      ];
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || defaultOrigins;
   app.use(cors({
     origin: allowedOrigins,
@@ -41,12 +47,27 @@ export function createApp() {
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("X-XSS-Protection", "1; mode=block");
     res.setHeader("Referrer-Policy", "same-origin");
-    res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.auth0.com https://*.stripe.com; frame-src https://*.stripe.com; object-src 'none'; base-uri 'self'");
+    res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.auth0.com https://*.stripe.com https://api.kill-switch.net; frame-src https://*.stripe.com; object-src 'none'; base-uri 'self'");
     if (process.env.NODE_ENV === "production") {
       res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     }
     next();
   });
+
+  // Origin verification — block direct access to Cloud Run, require CF proxy
+  if (process.env.NODE_ENV === "production") {
+    const cfSecret = process.env.CF_ORIGIN_SECRET;
+    if (cfSecret) {
+      app.use((req, res, next) => {
+        if (req.path === "/" && req.method === "GET") return next();
+        if (req.headers["x-origin-secret"] !== cfSecret) {
+          console.error(`[guardian] Blocked direct access from ${req.ip} to ${req.path}`);
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        next();
+      });
+    }
+  }
 
   app.use(express.json({ limit: "1mb" }));
 
@@ -62,6 +83,7 @@ export function createApp() {
     app.use("/billing/checkout", rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyGenerator: perUserKey }));
     app.use("/alerts/test", rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyGenerator: perUserKey }));
     app.use("/team/invite", rateLimit({ windowMs: 15 * 60 * 1000, max: 20, keyGenerator: perUserKey }));
+    app.use("/agent/report", rateLimit({ windowMs: 15 * 60 * 1000, max: 30 }));
   }
 
   // Skip morgan in test
@@ -214,11 +236,16 @@ export function createApp() {
     } catch (e) { next(e); }
   });
 
-  // Agent report
+  // Agent report — validated against GUARDIAN_AGENT_API_KEY
   app.post("/agent/report", async (req, res, next) => {
     try {
       const apiKey = req.headers.authorization?.replace("Bearer ", "");
       if (!apiKey) return res.status(401).json({ error: "Missing API key" });
+
+      const validKey = process.env.GUARDIAN_AGENT_API_KEY;
+      if (!validKey) return res.status(503).json({ error: "Agent API key not configured" });
+      if (apiKey !== validKey) return res.status(403).json({ error: "Invalid API key" });
+
       res.json({ received: true, timestamp: Date.now() });
     } catch (e) { next(e); }
   });
