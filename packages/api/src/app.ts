@@ -17,6 +17,7 @@ import { rulesRouter } from "./routes/rules/index.js";
 import { databaseRouter } from "./routes/database/index.js";
 import { billingRouter } from "./routes/billing/index.js";
 import { teamRouter } from "./routes/team/index.js";
+import { authRouter } from "./routes/auth/index.js";
 import { GuardianAccountModel } from "./models/guardian-account/schema.js";
 import { requireAuth, resolveGuardianAccount } from "./middleware/auth.js";
 import { runCheckCycle } from "./services/monitoring-engine.js";
@@ -155,6 +156,7 @@ export function createApp() {
   app.use("/database", ...authStack);
   app.use("/billing", ...authStack);
   app.use("/team", ...authStack);
+  app.use("/auth", ...authStack);
 
   // Authenticated routes
   app.use("/cloud-accounts", cloudAccountRouter);
@@ -163,6 +165,7 @@ export function createApp() {
   app.use("/database", databaseRouter);
   app.use("/billing", billingRouter);
   app.use("/team", teamRouter);
+  app.use("/auth", authRouter);
 
   // Manual check (requires auth — runs only the authenticated user's accounts)
   app.post("/check", requireAuth, resolveGuardianAccount, async (req, res, next) => {

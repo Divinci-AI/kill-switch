@@ -53,6 +53,26 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
 
   const token = authHeader.substring(7);
 
+  // Personal API key path (ks_ prefix)
+  if (token.startsWith("ks_")) {
+    try {
+      const { validateApiKey } = await import("../models/api-key/schema.js");
+      const result = await validateApiKey(token);
+      if (!result) {
+        res.status(401).json({ error: "Invalid API key" });
+        return;
+      }
+      req.userId = result.userId;
+      req.guardianAccountId = result.guardianAccountId;
+      return next();
+    } catch (error: any) {
+      console.error("[guardian] API key validation failed:", error.message);
+      res.status(401).json({ error: "API key validation failed" });
+      return;
+    }
+  }
+
+  // Auth0 JWT path
   try {
     const { payload } = await jwtVerify(token, JWKS, {
       issuer: `https://${AUTH0_DOMAIN}/`,
