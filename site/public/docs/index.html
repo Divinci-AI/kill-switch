@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Docs | Kill Switch</title>
+    <meta name="description" content="Kill Switch API documentation — monitor cloud spending, auto-kill runaway services, and protect your infrastructure.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: rgb(12, 18, 41);
+            color: #c4c5ca;
+        }
+        a { color: #5ce2e7; text-decoration: none; transition: color 0.2s; }
+        a:hover { color: #fff; }
+
+        /* ── Nav ─────────────────────────────────────── */
+        .navbar {
+            position: fixed; top: 0; left: 0; width: 100%;
+            z-index: 1000;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 2em; height: 58px;
+            background: rgba(51, 51, 51, 0.55);
+            backdrop-filter: blur(12px);
+            border-top: 4px solid #0e102dab;
+        }
+        .nav-brand {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600; font-size: 18px; color: #fff;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .nav-brand .icon { font-size: 24px; }
+        .nav-links { display: flex; gap: 24px; align-items: center; }
+        .nav-links a { color: #fff; font-weight: 500; font-size: 14px; }
+        .nav-links a.active { color: #5ce2e7; }
+        .btn-github {
+            background: #24292e; color: #fff !important;
+            padding: 7px 16px; border-radius: 6px;
+            font-weight: 600; font-size: 13px;
+            display: flex; align-items: center; gap: 6px;
+            border: 1px solid #444; transition: background 0.2s;
+        }
+        .btn-github:hover { background: #444; }
+
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand" style="text-decoration:none;">
+            <span class="icon">&#9889;</span>
+            <span>Kill Switch</span>
+        </a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/docs" class="active">API Docs</a>
+            <a href="/docs/integration.html">Integration</a>
+            <a href="https://github.com/Divinci-AI/kill-switch" class="btn-github">
+                <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                GitHub
+            </a>
+        </div>
+    </nav>
+
+    <div id="redoc-container" style="margin-top:58px;"></div>
+
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+    <script>
+        Redoc.init('/openapi.json', {
+            theme: {
+                colors: {
+                    primary: { main: '#5ce2e7' },
+                    success: { main: '#4caf50' },
+                    warning: { main: '#ff9800' },
+                    error: { main: '#ff6b6b' },
+                    text: { primary: '#c4c5ca', secondary: '#8a8d9b' },
+                    http: {
+                        get: '#5ce2e7',
+                        post: '#4caf50',
+                        put: '#ff9800',
+                        delete: '#ff6b6b',
+                        patch: '#ab47bc',
+                    },
+                },
+                typography: {
+                    fontFamily: "'Inter', sans-serif",
+                    headings: { fontFamily: "'Outfit', sans-serif" },
+                    code: { fontFamily: "'JetBrains Mono', monospace", fontSize: '13px' },
+                },
+                sidebar: {
+                    backgroundColor: 'rgb(10, 15, 35)',
+                    textColor: '#c4c5ca',
+                    activeTextColor: '#5ce2e7',
+                    groupItems: { activeBackgroundColor: 'rgba(92, 226, 231, 0.08)', activeTextColor: '#5ce2e7' },
+                },
+                rightPanel: {
+                    backgroundColor: 'rgb(8, 12, 28)',
+                    textColor: '#c4c5ca',
+                },
+                schema: {
+                    nestedBackground: 'rgba(255,255,255,0.03)',
+                },
+            },
+            scrollYOffset: 58,
+            hideDownloadButton: false,
+            nativeScrollbars: true,
+        }, document.getElementById('redoc-container'));
+    </script>
+</body>
+</html>

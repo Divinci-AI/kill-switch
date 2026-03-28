@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integration Guide | Kill Switch</title>
+    <meta name="description" content="Set up Kill Switch financial protection for your Cloudflare Workers project in under 10 minutes.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: rgb(12, 18, 41); color: #c4c5ca; }
+        a { color: #5ce2e7; text-decoration: none; }
+        a:hover { color: #fff; }
+        .navbar {
+            position: fixed; top: 0; left: 0; width: 100%; z-index: 1000;
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 2em; height: 58px;
+            background: rgba(51, 51, 51, 0.55); backdrop-filter: blur(12px);
+            border-top: 4px solid #0e102dab;
+        }
+        .nav-brand { font-family: 'Outfit', sans-serif; font-weight: 600; font-size: 18px; color: #fff; display: flex; align-items: center; gap: 10px; }
+        .nav-brand .icon { font-size: 24px; }
+        .nav-links { display: flex; gap: 24px; align-items: center; }
+        .nav-links a { color: #fff; font-weight: 500; font-size: 14px; }
+        .nav-links a.active { color: #5ce2e7; }
+        .btn-github { background: #24292e; color: #fff !important; padding: 7px 16px; border-radius: 6px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 6px; border: 1px solid #444; }
+        .btn-github:hover { background: #444; }
+        .content { max-width: 860px; margin: 0 auto; padding: 90px 2em 4em; }
+        h1 { font-family: 'Outfit', sans-serif; font-size: 2.2em; font-weight: 800; color: #fff; margin: 0 0 0.4em; }
+        h2 { font-family: 'Outfit', sans-serif; font-size: 1.5em; font-weight: 700; color: #fff; margin: 2em 0 0.6em; padding-top: 1em; border-top: 1px solid rgba(255,255,255,0.06); }
+        h3 { font-family: 'Outfit', sans-serif; font-size: 1.15em; font-weight: 600; color: #ddd; margin: 1.5em 0 0.4em; }
+        p { line-height: 1.7; margin: 0 0 1em; }
+        ul, ol { margin: 0 0 1.2em 1.5em; line-height: 1.8; }
+        code { font-family: 'JetBrains Mono', monospace; font-size: 0.88em; background: rgba(255,255,255,0.06); padding: 2px 6px; border-radius: 4px; color: #5ce2e7; }
+        pre { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 1.2em; overflow-x: auto; margin: 0 0 1.5em; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.6; color: #c4c5ca; }
+        pre code { background: none; padding: 0; color: inherit; }
+        .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-right: 6px; }
+        .badge-api { background: rgba(92,226,231,0.15); color: #5ce2e7; }
+        .badge-agent { background: rgba(76,175,80,0.15); color: #4caf50; }
+        .badge-cli { background: rgba(255,152,0,0.15); color: #ff9800; }
+        table { width: 100%; border-collapse: collapse; margin: 0 0 1.5em; font-size: 14px; }
+        th { text-align: left; padding: 10px 12px; background: rgba(255,255,255,0.04); color: #fff; font-weight: 600; }
+        td { padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+        .callout { background: rgba(92,226,231,0.06); border-left: 3px solid #5ce2e7; padding: 1em 1.2em; border-radius: 0 6px 6px 0; margin: 0 0 1.5em; }
+        .callout-warn { background: rgba(255,152,0,0.06); border-left-color: #ff9800; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="nav-brand" style="text-decoration:none;">
+            <span class="icon">&#9889;</span>
+            <span>Kill Switch</span>
+        </a>
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/docs">API Docs</a>
+            <a href="/docs/integration.html" class="active">Integration</a>
+            <a href="https://github.com/AiExpanse/kill-switch" class="btn-github">
+                <svg height="16" width="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                GitHub
+            </a>
+        </div>
+    </nav>
+
+    <div class="content">
+        <h1>Integration Guide</h1>
+        <p>Set up Kill Switch financial protection for your project. Three integration paths, use whichever fits your architecture.</p>
+
+        <div style="display:flex;gap:8px;margin-bottom:2em;">
+            <span class="badge badge-api">REST API</span>
+            <span class="badge badge-agent">Edge Agent</span>
+            <span class="badge badge-cli">CLI (wrangler)</span>
+        </div>
+
+        <h2>Integration Paths</h2>
+
+        <table>
+            <tr><th>Method</th><th>Best For</th><th>Setup Time</th></tr>
+            <tr><td><strong>REST API</strong></td><td>Direct HTTP integration, CI/CD, webhooks</td><td>~5 min</td></tr>
+            <tr><td><strong>Edge Agent</strong></td><td>Cloudflare Workers monitoring with local kill-switch</td><td>~10 min</td></tr>
+            <tr><td><strong>Spend Guard</strong></td><td>In-app budget limits for GPU/AI services (RunPod, Gemini, etc.)</td><td>~15 min</td></tr>
+        </table>
+
+        <h2>1. REST API</h2>
+        <p>The Kill Switch API at <code>https://api.kill-switch.net</code> provides full programmatic control over monitoring, rules, and kill switches.</p>
+
+        <h3>Quick Start</h3>
+<pre><code># Health check
+curl https://api.kill-switch.net/
+
+# List supported providers
+curl https://api.kill-switch.net/providers
+
+# List preset rules (no auth needed)
+curl https://api.kill-switch.net/rules/presets
+
+# Trigger a kill switch (requires auth)
+curl -X POST https://api.kill-switch.net/rules/agent/trigger \
+  -H "Authorization: Bearer YOUR_JWT" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "threatDescription": "RunPod spend exceeded $50 in 2 hours",
+    "severity": "critical",
+    "recommendedActions": [
+      { "type": "disconnect", "target": "my-worker" }
+    ],
+    "autoExecute": false
+  }'</code></pre>
+
+        <h3>Key Endpoints</h3>
+        <table>
+            <tr><th>Endpoint</th><th>Auth</th><th>Purpose</th></tr>
+            <tr><td><code>GET /providers</code></td><td>None</td><td>List Cloudflare, GCP, AWS with default thresholds</td></tr>
+            <tr><td><code>GET /rules/presets</code></td><td>None</td><td>DDoS, cost-runaway, GPU-runaway, Lambda-loop, etc.</td></tr>
+            <tr><td><code>POST /cloud-accounts</code></td><td>JWT</td><td>Connect a cloud provider for monitoring</td></tr>
+            <tr><td><code>POST /check</code></td><td>JWT</td><td>Run monitoring check on all accounts</td></tr>
+            <tr><td><code>POST /rules/agent/trigger</code></td><td>JWT</td><td>AI agent triggers a kill switch</td></tr>
+            <tr><td><code>POST /agent/report</code></td><td>API Key</td><td>Edge agent submits metrics</td></tr>
+            <tr><td><code>GET /analytics/overview</code></td><td>JWT</td><td>FinOps dashboard (daily costs, savings)</td></tr>
+            <tr><td><code>POST /database/kill</code></td><td>JWT</td><td>Initiate database kill sequence</td></tr>
+        </table>
+
+        <p>Full API reference: <a href="/docs">API Docs (OpenAPI)</a></p>
+
+        <h2>2. Edge Agent (Cloudflare Workers)</h2>
+        <p>The edge agent is a lightweight Cloudflare Worker that runs in <strong>your</strong> account. Your API tokens never leave your infrastructure.</p>
+
+        <div class="callout">
+            <strong>Security model:</strong> The agent queries Cloudflare's GraphQL API using your token locally, checks against thresholds, and only sends aggregated metrics to the Kill Switch API. If a threshold is exceeded, it disconnects the worker locally before reporting.
+        </div>
+
+        <h3>Deploy</h3>
+<pre><code># Clone and deploy
+git clone https://github.com/AiExpanse/kill-switch.git
+cd kill-switch/packages/agent
+
+# Edit thresholds in wrangler.toml, then:
+wrangler deploy
+
+# Set your CF credentials (stays in your account)
+wrangler secret put CLOUDFLARE_API_TOKEN
+wrangler secret put CLOUDFLARE_ACCOUNT_ID</code></pre>
+
+        <h3>Configuration</h3>
+<pre><code># wrangler.toml
+[vars]
+GUARDIAN_API_URL = "https://api.kill-switch.net"
+DO_REQUEST_THRESHOLD = "1000000"
+DO_WALLTIME_HOURS_THRESHOLD = "100"
+WORKER_REQUEST_THRESHOLD = "10000000"
+
+[triggers]
+crons = ["*/5 * * * *"]  # Check every 5 minutes</code></pre>
+
+        <h3>What It Monitors</h3>
+        <table>
+            <tr><th>Metric</th><th>Default Threshold</th><th>Action on Breach</th></tr>
+            <tr><td>Durable Object requests/day</td><td>1,000,000</td><td>Auto-disconnect routes</td></tr>
+            <tr><td>DO wall-time hours/day</td><td>100 hours</td><td>Auto-disconnect routes</td></tr>
+            <tr><td>Worker requests/day</td><td>10,000,000</td><td>Auto-disconnect routes</td></tr>
+        </table>
+
+        <h2>3. Spend Guard (In-App Budget Limits)</h2>
+        <p>For services the edge agent can't see (RunPod GPU, Google Gemini, external APIs), add the Spend Guard directly to your app. It uses D1 to track per-job costs and enforces daily budgets.</p>
+
+        <h3>How It Works</h3>
+        <ol>
+            <li>Before every generation request, <code>checkSpendBudget()</code> runs a single D1 query</li>
+            <li>If any limit is exceeded, returns <code>429</code> with a clear message</li>
+            <li>After job creation, <code>recordSpend()</code> logs the estimated cost</li>
+            <li>When the provider reports completion, <code>updateActualCost()</code> replaces the estimate</li>
+            <li>At 80% budget utilization, PagerDuty/Discord/Slack alerts fire</li>
+            <li>At 100%, all generation is blocked</li>
+        </ol>
+
+        <h3>Install</h3>
+<pre><code># Copy spend-guard.ts into your project
+cp kill-switch/INTEGRATION.md .  # Full setup instructions
+
+# The spend_log D1 table auto-creates on first use
+# No migration needed</code></pre>
+
+        <h3>Wire Into Your Generate Endpoint</h3>
+<pre><code>import { checkSpendBudget, recordSpend } from "./services/spend-guard";
+
+// Before processing
+const budget = await checkSpendBudget("runpod", userId);
+if (!budget.allowed) {
+  return new Response(budget.reason, { status: 429 });
+}
+
+// After creating the job
+await recordSpend("runpod", userId, jobId);</code></pre>
+
+        <h3>Default Budget Limits</h3>
+        <table>
+            <tr><th>Limit</th><th>Default</th><th>Protects Against</th></tr>
+            <tr><td>Global daily spend</td><td>$50/day</td><td>Total platform runaway</td></tr>
+            <tr><td>Per-user daily jobs</td><td>100/day</td><td>Single-account abuse</td></tr>
+            <tr><td>RunPod daily spend</td><td>$25/day</td><td>GPU cost explosion</td></tr>
+            <tr><td>RunPod job timeout</td><td>30 min</td><td>Stuck/infinite GPU jobs</td></tr>
+            <tr><td>Max concurrent GPU jobs</td><td>8</td><td>Parallel job flood</td></tr>
+            <tr><td>VEO daily requests</td><td>200/day</td><td>API quota burn</td></tr>
+            <tr><td>TTS daily requests</td><td>500/day</td><td>TTS abuse</td></tr>
+        </table>
+
+        <h2>4. Alerting</h2>
+        <p>Alerts fire automatically when spend approaches limits.</p>
+
+        <table>
+            <tr><th>Channel</th><th>Trigger</th><th>Behavior</th></tr>
+            <tr><td><strong>PagerDuty</strong></td><td>80% warning, 95% critical</td><td>Pages on-call, deduped per severity/day</td></tr>
+            <tr><td><strong>Discord</strong></td><td>Same thresholds</td><td>Rich embed with per-provider breakdown</td></tr>
+            <tr><td><strong>Slack</strong></td><td>Same thresholds</td><td>Text message with severity emoji</td></tr>
+        </table>
+
+        <h3>Configure PagerDuty</h3>
+<pre><code># Store routing key in Cloudflare Secrets Store
+wrangler secrets-store secret create \
+  0b7ac993cf26413ea6e2f1b5ede20b25 \
+  --name PAGERDUTY_ROUTING_KEY \
+  --scopes workers --remote
+
+# Bind in wrangler.toml
+[[secrets_store_secrets]]
+binding = "PAGERDUTY_ROUTING_KEY"
+store_id = "0b7ac993cf26413ea6e2f1b5ede20b25"
+secret_name = "PAGERDUTY_ROUTING_KEY"</code></pre>
+
+        <div class="callout callout-warn">
+            <strong>No CLI or SDK yet.</strong> Kill Switch currently provides a REST API and deployable workers. A TypeScript SDK and CLI are on the roadmap. For now, use <code>curl</code> or any HTTP client to interact with the API, and <code>wrangler deploy</code> for the edge agent.
+        </div>
+
+        <h2>5. Supported Providers</h2>
+        <table>
+            <tr><th>Provider</th><th>Resources Monitored</th><th>Kill Actions</th></tr>
+            <tr><td><strong>Cloudflare</strong></td><td>Workers, Durable Objects, R2, D1, Queues, Stream, Zones</td><td>Disconnect routes, disable workers.dev, delete worker</td></tr>
+            <tr><td><strong>GCP</strong></td><td>Compute Engine, GKE, BigQuery, Cloud Functions, GCS</td><td>Stop instances, scale down, disable billing</td></tr>
+            <tr><td><strong>AWS</strong></td><td>EC2, Lambda, RDS, ECS, EKS, SageMaker, S3</td><td>Stop instances, throttle concurrency, disable functions</td></tr>
+        </table>
+
+        <h2>Need Help?</h2>
+        <ul>
+            <li><a href="/docs">Full API Reference</a> (OpenAPI 3.1)</li>
+            <li><a href="https://github.com/AiExpanse/kill-switch">GitHub Repository</a></li>
+            <li><a href="https://github.com/AiExpanse/kill-switch/blob/main/INTEGRATION.md">INTEGRATION.md</a> (detailed Claude Code setup guide)</li>
+        </ul>
+    </div>
+</body>
+</html>
