@@ -5,50 +5,19 @@
  * Kill actions: scale-down (set function concurrency), disable-service.
  */
 
-import type {
-  CloudProvider, DecryptedCredential, ThresholdConfig,
-  UsageResult, ActionResult, ValidationResult, ServiceUsage, Violation,
-} from "../types.js";
+import type { CloudProvider, ServiceUsage } from "../types.js";
+import { evaluateViolations, providerFetch } from "../shared.js";
 
 const VERCEL_BASE = "https://api.vercel.com";
 
-async function vercelRequest(token: string, path: string, teamId?: string): Promise<any> {
-  const url = new URL(`${VERCEL_BASE}${path}`);
-  if (teamId) url.searchParams.set("teamId", teamId);
-  const resp = await fetch(url.toString(), {
-    method: "GET",
-    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-  });
-  if (!resp.ok) {
-    console.error(`[guardian] Vercel API error: ${resp.status}`);
-    throw new Error(`Vercel API error: ${resp.status}`);
-  }
-  return resp.json();
+function authHeaders(token: string) {
+  return { "Authorization": `Bearer ${token}` };
 }
 
-function evaluateViolations(services: ServiceUsage[], thresholds: ThresholdConfig, totalDailyCost: number): Violation[] {
-  const violations: Violation[] = [];
-  for (const service of services) {
-    for (const metric of service.metrics) {
-      if (!metric.thresholdKey) continue;
-      const threshold = thresholds[metric.thresholdKey];
-      if (threshold !== undefined && metric.value > threshold) {
-        violations.push({
-          serviceName: service.serviceName, metricName: metric.name,
-          currentValue: metric.value, threshold, unit: metric.unit,
-          severity: metric.value > threshold * 2 ? "critical" : "warning",
-        });
-      }
-    }
-  }
-  if (thresholds.vercelDailyCostUSD && totalDailyCost > thresholds.vercelDailyCostUSD) {
-    violations.push({
-      serviceName: "vercel-billing", metricName: "Daily Cost",
-      currentValue: totalDailyCost, threshold: thresholds.vercelDailyCostUSD, unit: "USD",
-      severity: totalDailyCost > thresholds.vercelDailyCostUSD * 2 ? "critical" : "warning",
-    });
-  }
-  return violations;
+function buildPath(path: string, teamId?: string): string {
+  if (!teamId) return path;
+  const sep = path.includes("?") ? "&" : "?";
+  return `${path}${sep}teamId=${teamId}`;
 }
 
 export const vercelProvider: CloudProvider = {
@@ -58,6 +27,7 @@ export const vercelProvider: CloudProvider = {
   async checkUsage(credential, thresholds) {
     const token = credential.vercelApiToken!;
     const teamId = credential.vercelTeamId;
+    const headers = authHeaders(token);
     let invocations = 0;
     let bandwidthGB = 0;
     let totalCost = 0;
@@ -65,7 +35,7 @@ export const vercelProvider: CloudProvider = {
     try {
       const now = new Date();
       const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-      const usage = await vercelRequest(token, `/v1/usage?since=${startOfDay}`, teamId);
+      const usage = await providerFetch(VERCEL_BASE, buildPath(`/v1/usage?since=${startOfDay}`, teamId), headers, "Vercel");
       invocations = usage?.functionInvocations || usage?.metrics?.functionInvocations || 0;
       const bandwidthBytes = usage?.bandwidth || usage?.metrics?.bandwidth || 0;
       bandwidthGB = bandwidthBytes / (1024 ** 3);
@@ -75,7 +45,7 @@ export const vercelProvider: CloudProvider = {
       if (!isFinite(totalCost)) totalCost = 0;
     } catch {
       try {
-        await vercelRequest(token, "/v2/user");
+        await providerFetch(VERCEL_BASE, buildPath("/v2/user", teamId), headers, "Vercel");
       } catch { throw new Error("Failed to connect to Vercel API"); }
     }
 
@@ -88,7 +58,7 @@ export const vercelProvider: CloudProvider = {
       estimatedDailyCostUSD: totalCost,
     }];
 
-    const violations = evaluateViolations(services, thresholds, totalCost);
+    const violations = evaluateViolations(services, thresholds, totalCost, "vercelDailyCostUSD", "vercel-billing");
     return {
       provider: "vercel", accountId: teamId || "vercel",
       checkedAt: Date.now(), services, totalEstimatedDailyCostUSD: totalCost,
@@ -109,7 +79,7 @@ export const vercelProvider: CloudProvider = {
   async validateCredential(credential) {
     if (!credential.vercelApiToken) return { valid: false, error: "Missing Vercel API token" };
     try {
-      const user = await vercelRequest(credential.vercelApiToken, "/v2/user");
+      const user = await providerFetch(VERCEL_BASE, "/v2/user", authHeaders(credential.vercelApiToken), "Vercel");
       const name = user?.user?.username || user?.user?.name || "unknown";
       return {
         valid: true, accountId: credential.vercelTeamId || name,

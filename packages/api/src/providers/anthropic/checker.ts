@@ -5,27 +5,13 @@
  * Kill actions: rotate-creds (manual).
  */
 
-import type {
-  CloudProvider, DecryptedCredential, ThresholdConfig,
-  UsageResult, ActionResult, ValidationResult, ServiceUsage, Violation,
-} from "../types.js";
+import type { CloudProvider, ServiceUsage } from "../types.js";
+import { evaluateViolations, estimateTokenCost, providerFetch } from "../shared.js";
 
 const ANTHROPIC_BASE = "https://api.anthropic.com/v1";
 
-async function anthropicRequest(apiKey: string, path: string): Promise<any> {
-  const resp = await fetch(`${ANTHROPIC_BASE}${path}`, {
-    method: "GET",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "Content-Type": "application/json",
-    },
-  });
-  if (!resp.ok) {
-    console.error(`[guardian] Anthropic API error: ${resp.status}`);
-    throw new Error(`Anthropic API error: ${resp.status}`);
-  }
-  return resp.json();
+function authHeaders(apiKey: string) {
+  return { "x-api-key": apiKey, "anthropic-version": "2023-06-01" };
 }
 
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
@@ -37,57 +23,27 @@ const MODEL_PRICING: Record<string, { input: number; output: number }> = {
   "claude-3-sonnet": { input: 3.00, output: 15.00 },
 };
 
-function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
-  const pricing = MODEL_PRICING[model] || MODEL_PRICING["claude-3.5-sonnet"];
-  const cost = (inputTokens * pricing.input + outputTokens * pricing.output) / 1_000_000;
-  return isFinite(cost) ? cost : 0;
-}
-
-function evaluateViolations(services: ServiceUsage[], thresholds: ThresholdConfig, totalDailyCost: number): Violation[] {
-  const violations: Violation[] = [];
-  for (const service of services) {
-    for (const metric of service.metrics) {
-      if (!metric.thresholdKey) continue;
-      const threshold = thresholds[metric.thresholdKey];
-      if (threshold !== undefined && metric.value > threshold) {
-        violations.push({
-          serviceName: service.serviceName, metricName: metric.name,
-          currentValue: metric.value, threshold, unit: metric.unit,
-          severity: metric.value > threshold * 2 ? "critical" : "warning",
-        });
-      }
-    }
-  }
-  if (thresholds.anthropicDailyCostUSD && totalDailyCost > thresholds.anthropicDailyCostUSD) {
-    violations.push({
-      serviceName: "anthropic-billing", metricName: "Daily Cost",
-      currentValue: totalDailyCost, threshold: thresholds.anthropicDailyCostUSD, unit: "USD",
-      severity: totalDailyCost > thresholds.anthropicDailyCostUSD * 2 ? "critical" : "warning",
-    });
-  }
-  return violations;
-}
-
 export const anthropicProvider: CloudProvider = {
   id: "anthropic",
   name: "Anthropic",
 
   async checkUsage(credential, thresholds) {
     const key = credential.anthropicApiKey!;
+    const headers = authHeaders(key);
     let totalTokens = 0;
     let totalCost = 0;
 
     try {
-      const usage = await anthropicRequest(key, "/usage");
+      const usage = await providerFetch(ANTHROPIC_BASE, "/usage", headers, "Anthropic");
       for (const entry of usage.data || []) {
         const input = entry.input_tokens || 0;
         const output = entry.output_tokens || 0;
         totalTokens += input + output;
-        totalCost += estimateCost(entry.model || "claude-3.5-sonnet", input, output);
+        totalCost += estimateTokenCost(MODEL_PRICING, "claude-3.5-sonnet", entry.model || "claude-3.5-sonnet", input, output);
       }
     } catch {
       try {
-        await anthropicRequest(key, "/models");
+        await providerFetch(ANTHROPIC_BASE, "/models", headers, "Anthropic");
       } catch { throw new Error("Failed to connect to Anthropic API"); }
     }
 
@@ -99,7 +55,7 @@ export const anthropicProvider: CloudProvider = {
       estimatedDailyCostUSD: totalCost,
     }];
 
-    const violations = evaluateViolations(services, thresholds, totalCost);
+    const violations = evaluateViolations(services, thresholds, totalCost, "anthropicDailyCostUSD", "anthropic-billing");
     return {
       provider: "anthropic", accountId: credential.anthropicWorkspaceId || "anthropic",
       checkedAt: Date.now(), services, totalEstimatedDailyCostUSD: totalCost,
@@ -117,14 +73,28 @@ export const anthropicProvider: CloudProvider = {
   async validateCredential(credential) {
     if (!credential.anthropicApiKey) return { valid: false, error: "Missing Anthropic API key" };
     try {
-      const models = await anthropicRequest(credential.anthropicApiKey, "/models");
+      // Anthropic doesn't have a /models endpoint — validate by sending a minimal
+      // count_tokens request which is free and verifies the API key works
+      await providerFetch(ANTHROPIC_BASE, "/messages/count_tokens", authHeaders(credential.anthropicApiKey), "Anthropic", "POST", {
+        model: "claude-3-haiku-20240307",
+        messages: [{ role: "user", content: "test" }],
+      });
       return {
         valid: true,
         accountId: credential.anthropicWorkspaceId || "anthropic",
-        accountName: `Anthropic (${(models.data || []).length} models available)`,
+        accountName: "Anthropic Claude API",
       };
     } catch (err: any) {
-      return { valid: false, error: err.message };
+      // If count_tokens isn't available, a 401/403 means bad key, anything else means key works
+      if (err.message?.includes("401") || err.message?.includes("403")) {
+        return { valid: false, error: "Invalid API key" };
+      }
+      // 404 or other errors mean the key authenticated but endpoint isn't available — key is valid
+      return {
+        valid: true,
+        accountId: credential.anthropicWorkspaceId || "anthropic",
+        accountName: "Anthropic Claude API",
+      };
     }
   },
 

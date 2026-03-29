@@ -5,55 +5,15 @@
  * Kill actions: rotate-creds (manual), disable-service (mute monitors).
  */
 
-import type {
-  CloudProvider, DecryptedCredential, ThresholdConfig,
-  UsageResult, ActionResult, ValidationResult, ServiceUsage, Violation,
-} from "../types.js";
+import type { CloudProvider, ServiceUsage } from "../types.js";
+import { evaluateViolations, providerFetch } from "../shared.js";
 
 function ddBase(site?: "us" | "eu"): string {
   return site === "eu" ? "https://api.datadoghq.eu/api/v1" : "https://api.datadoghq.com/api/v1";
 }
 
-async function ddRequest(cred: DecryptedCredential, path: string): Promise<any> {
-  const base = ddBase(cred.datadogSite);
-  const resp = await fetch(`${base}${path}`, {
-    method: "GET",
-    headers: {
-      "DD-API-KEY": cred.datadogApiKey!,
-      "DD-APPLICATION-KEY": cred.datadogApplicationKey!,
-      "Content-Type": "application/json",
-    },
-  });
-  if (!resp.ok) {
-    console.error(`[guardian] Datadog API error: ${resp.status}`);
-    throw new Error(`Datadog API error: ${resp.status}`);
-  }
-  return resp.json();
-}
-
-function evaluateViolations(services: ServiceUsage[], thresholds: ThresholdConfig, totalDailyCost: number): Violation[] {
-  const violations: Violation[] = [];
-  for (const service of services) {
-    for (const metric of service.metrics) {
-      if (!metric.thresholdKey) continue;
-      const threshold = thresholds[metric.thresholdKey];
-      if (threshold !== undefined && metric.value > threshold) {
-        violations.push({
-          serviceName: service.serviceName, metricName: metric.name,
-          currentValue: metric.value, threshold, unit: metric.unit,
-          severity: metric.value > threshold * 2 ? "critical" : "warning",
-        });
-      }
-    }
-  }
-  if (thresholds.datadogDailyCostUSD && totalDailyCost > thresholds.datadogDailyCostUSD) {
-    violations.push({
-      serviceName: "datadog-billing", metricName: "Daily Cost",
-      currentValue: totalDailyCost, threshold: thresholds.datadogDailyCostUSD, unit: "USD",
-      severity: totalDailyCost > thresholds.datadogDailyCostUSD * 2 ? "critical" : "warning",
-    });
-  }
-  return violations;
+function ddHeaders(apiKey: string, applicationKey: string): Record<string, string> {
+  return { "DD-API-KEY": apiKey, "DD-APPLICATION-KEY": applicationKey };
 }
 
 export const datadogProvider: CloudProvider = {
@@ -61,6 +21,8 @@ export const datadogProvider: CloudProvider = {
   name: "Datadog",
 
   async checkUsage(credential, thresholds) {
+    const base = ddBase(credential.datadogSite);
+    const headers = ddHeaders(credential.datadogApiKey!, credential.datadogApplicationKey!);
     let hostCount = 0;
     let logIngestGB = 0;
     let totalCost = 0;
@@ -68,7 +30,7 @@ export const datadogProvider: CloudProvider = {
     try {
       const now = new Date();
       const month = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-      const usage = await ddRequest(credential, `/usage/summary?start_month=${month}`);
+      const usage = await providerFetch(base, `/usage/summary?start_month=${month}`, headers, "Datadog");
       hostCount = usage?.host_count || usage?.usage?.[0]?.host_count || 0;
       // Monthly totals — divide by days elapsed to get daily average
       const dayOfMonth = Math.max(1, now.getDate());
@@ -80,7 +42,7 @@ export const datadogProvider: CloudProvider = {
       if (!isFinite(totalCost)) totalCost = 0;
     } catch {
       try {
-        await ddRequest(credential, "/validate");
+        await providerFetch(base, "/validate", headers, "Datadog");
       } catch { throw new Error("Failed to connect to Datadog API"); }
     }
 
@@ -93,7 +55,7 @@ export const datadogProvider: CloudProvider = {
       estimatedDailyCostUSD: totalCost,
     }];
 
-    const violations = evaluateViolations(services, thresholds, totalCost);
+    const violations = evaluateViolations(services, thresholds, totalCost, "datadogDailyCostUSD", "datadog-billing");
     return {
       provider: "datadog", accountId: credential.datadogSite === "eu" ? "datadog-eu" : "datadog-us",
       checkedAt: Date.now(), services, totalEstimatedDailyCostUSD: totalCost,
@@ -116,7 +78,9 @@ export const datadogProvider: CloudProvider = {
       return { valid: false, error: "Missing Datadog API key or Application key" };
     }
     try {
-      const result = await ddRequest(credential, "/validate");
+      const base = ddBase(credential.datadogSite);
+      const headers = ddHeaders(credential.datadogApiKey, credential.datadogApplicationKey);
+      const result = await providerFetch(base, "/validate", headers, "Datadog");
       return {
         valid: result.valid === true,
         accountId: credential.datadogSite === "eu" ? "datadog-eu" : "datadog-us",

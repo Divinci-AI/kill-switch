@@ -5,54 +5,31 @@
  * Kill actions: scale-down (resize warehouse), stop-instances (suspend warehouse).
  */
 
-import type {
-  CloudProvider, DecryptedCredential, ThresholdConfig,
-  UsageResult, ActionResult, ValidationResult, ServiceUsage, Violation,
-} from "../types.js";
+import type { CloudProvider, DecryptedCredential, ServiceUsage } from "../types.js";
+import { evaluateViolations, providerFetch } from "../shared.js";
 
-async function snowflakeSQL(cred: DecryptedCredential, sql: string): Promise<any> {
-  const base = `https://${cred.snowflakeAccountName}.snowflakecomputing.com/api/v2/statements`;
-  const auth = Buffer.from(`${cred.snowflakeUsername}:${cred.snowflakePassword}`).toString("base64");
-  const body = JSON.stringify({
-    statement: sql,
-    warehouse: cred.snowflakeWarehouseName || "COMPUTE_WH",
-    role: cred.snowflakeRole || "ACCOUNTADMIN",
-  });
-  const resp = await fetch(base, {
-    method: "POST",
-    headers: { "Authorization": `Basic ${auth}`, "Content-Type": "application/json", "Accept": "application/json" },
-    body,
-  });
-  if (!resp.ok) {
-    console.error(`[guardian] Snowflake API error: ${resp.status}`);
-    throw new Error(`Snowflake API error: ${resp.status}`);
-  }
-  return resp.json();
+function snowflakeBase(cred: DecryptedCredential): string {
+  return `https://${cred.snowflakeAccountName}.snowflakecomputing.com/api/v2`;
 }
 
-function evaluateViolations(services: ServiceUsage[], thresholds: ThresholdConfig, totalDailyCost: number): Violation[] {
-  const violations: Violation[] = [];
-  for (const service of services) {
-    for (const metric of service.metrics) {
-      if (!metric.thresholdKey) continue;
-      const threshold = thresholds[metric.thresholdKey];
-      if (threshold !== undefined && metric.value > threshold) {
-        violations.push({
-          serviceName: service.serviceName, metricName: metric.name,
-          currentValue: metric.value, threshold, unit: metric.unit,
-          severity: metric.value > threshold * 2 ? "critical" : "warning",
-        });
-      }
-    }
-  }
-  if (thresholds.snowflakeDailyCostUSD && totalDailyCost > thresholds.snowflakeDailyCostUSD) {
-    violations.push({
-      serviceName: "snowflake-billing", metricName: "Daily Cost",
-      currentValue: totalDailyCost, threshold: thresholds.snowflakeDailyCostUSD, unit: "USD",
-      severity: totalDailyCost > thresholds.snowflakeDailyCostUSD * 2 ? "critical" : "warning",
-    });
-  }
-  return violations;
+function snowflakeHeaders(cred: DecryptedCredential): Record<string, string> {
+  const auth = Buffer.from(`${cred.snowflakeUsername}:${cred.snowflakePassword}`).toString("base64");
+  return { "Authorization": `Basic ${auth}`, "Accept": "application/json" };
+}
+
+async function snowflakeSQL(cred: DecryptedCredential, sql: string): Promise<any> {
+  return providerFetch(
+    snowflakeBase(cred),
+    "/statements",
+    snowflakeHeaders(cred),
+    "Snowflake",
+    "POST",
+    {
+      statement: sql,
+      warehouse: cred.snowflakeWarehouseName || "COMPUTE_WH",
+      role: cred.snowflakeRole || "ACCOUNTADMIN",
+    },
+  );
 }
 
 export const snowflakeProvider: CloudProvider = {
@@ -60,6 +37,11 @@ export const snowflakeProvider: CloudProvider = {
   name: "Snowflake",
 
   async checkUsage(credential, thresholds) {
+    const wh = credential.snowflakeWarehouseName || "COMPUTE_WH";
+    if (!/^[A-Za-z0-9_]+$/.test(wh)) {
+      throw new Error("Invalid warehouse name — must be alphanumeric");
+    }
+
     let credits = 0;
     let queries = 0;
     let totalCost = 0;
@@ -91,7 +73,7 @@ export const snowflakeProvider: CloudProvider = {
       estimatedDailyCostUSD: totalCost,
     }];
 
-    const violations = evaluateViolations(services, thresholds, totalCost);
+    const violations = evaluateViolations(services, thresholds, totalCost, "snowflakeDailyCostUSD", "snowflake-billing");
     return {
       provider: "snowflake", accountId: credential.snowflakeAccountName || "snowflake",
       checkedAt: Date.now(), services, totalEstimatedDailyCostUSD: totalCost,

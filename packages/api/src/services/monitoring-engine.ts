@@ -59,11 +59,20 @@ export async function runCheckCycle(guardianAccountId?: string): Promise<CheckRe
   }
 
   console.error(`[guardian] Checking ${activeAccounts.length} cloud account(s)...`);
-  const results: CheckResult[] = [];
 
-  for (const cloudAccount of activeAccounts) {
-    const result = await checkSingleAccount(cloudAccount);
-    results.push(result);
+  // Run checks concurrently (max 5 at a time to avoid thundering herd)
+  const CONCURRENCY = 5;
+  const results: CheckResult[] = [];
+  for (let i = 0; i < activeAccounts.length; i += CONCURRENCY) {
+    const batch = activeAccounts.slice(i, i + CONCURRENCY);
+    const settled = await Promise.allSettled(batch.map(a => checkSingleAccount(a)));
+    for (const outcome of settled) {
+      if (outcome.status === "fulfilled") {
+        results.push(outcome.value);
+      } else {
+        console.error("[guardian] Account check failed:", outcome.reason?.message || outcome.reason);
+      }
+    }
   }
 
   const violations = results.filter(r => r.status === "violation");
