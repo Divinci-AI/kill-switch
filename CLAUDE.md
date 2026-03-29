@@ -86,6 +86,16 @@ Required permissions:
 - **GCP** — Cloud Run, Compute Engine, GKE, BigQuery, Cloud Functions, Cloud Storage
 - **AWS** — EC2, Lambda, RDS, ECS, EKS, S3, SageMaker, Cost Explorer
 - **RunPod** — GPU Pods (on-demand & spot), Serverless Endpoints, Network Volumes
+- **Redis** — Redis Cloud, AWS ElastiCache, Self-hosted (memory, connections, ops/sec, cost)
+- **MongoDB** — MongoDB Atlas, Self-hosted (storage, connections, ops/sec, cost)
+
+## Organizations & Permissions
+- Multi-org support: users can create/join multiple orgs (team/enterprise tier)
+- Org switcher in web UI header; `X-Org-Id` header for API org selection
+- Role-based permissions: owner > admin > member > viewer
+- Permission middleware at `packages/api/src/middleware/permissions.ts`
+- Activity logging: all mutations tracked in PostgreSQL `activity_log` table
+- Activity page at `/activity` (team/enterprise only)
 
 ## Dogfooding
 - `packages/api/src/dogfood/` — Self-monitoring config and setup script
