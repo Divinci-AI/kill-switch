@@ -195,6 +195,7 @@ teamRouter.post("/invite/accept", async (req: any, res, next) => {
 
     logActivity({
       orgId: invitation.guardianAccountId, actorUserId: req.userId,
+      actorEmail: invitation.email,
       action: "team.join", resourceType: "team_member", resourceId: member._id.toString(),
       details: { email: invitation.email, role: invitation.role }, ipAddress: req.ip,
     });
@@ -254,6 +255,17 @@ teamRouter.delete("/members/:memberId", requireTeamTier, requirePermission("team
     });
 
     if (!member) return res.status(404).json({ error: "Team member not found" });
+
+    // Clear activeOrgId if the removed user had this org selected
+    try {
+      const { UserProfileModel } = await import("../../models/user-profile/schema.js");
+      await UserProfileModel.updateOne(
+        { userId: member.userId, activeOrgId: req.guardianAccountId },
+        { $set: { activeOrgId: null } }
+      );
+    } catch {
+      // UserProfile cleanup is best-effort — don't fail the removal
+    }
 
     logActivity({
       orgId: req.guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,

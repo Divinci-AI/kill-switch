@@ -162,6 +162,10 @@ orgsRouter.get("/:orgId", async (req: any, res, next) => {
  */
 orgsRouter.patch("/:orgId", requirePermission("org:manage"), async (req: any, res, next) => {
   try {
+    // Verify the target org matches the resolved org (prevents IDOR)
+    if (req.params.orgId !== req.guardianAccountId) {
+      return res.status(403).json({ error: "You can only manage the organization you are currently in" });
+    }
     const { name, slug } = req.body;
     const updates: Record<string, any> = {};
 
@@ -214,6 +218,10 @@ orgsRouter.patch("/:orgId", requirePermission("org:manage"), async (req: any, re
  */
 orgsRouter.delete("/:orgId", requirePermission("org:delete"), async (req: any, res, next) => {
   try {
+    // Verify the target org matches the resolved org (prevents IDOR)
+    if (req.params.orgId !== req.guardianAccountId) {
+      return res.status(403).json({ error: "You can only delete the organization you are currently in" });
+    }
     const account = await GuardianAccountModel.findById(req.params.orgId);
     if (!account) return res.status(404).json({ error: "Organization not found" });
 
