@@ -35,7 +35,7 @@ export const openApiSpec = {
     },
     "/providers/{providerId}/validate": {
       post: { summary: "Validate cloud credentials", operationId: "validateCredential", tags: ["Providers"],
-        parameters: [{ name: "providerId", in: "path", required: true, schema: { type: "string", enum: ["cloudflare", "gcp"] } }],
+        parameters: [{ name: "providerId", in: "path", required: true, schema: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod"] } }],
         requestBody: { required: true, content: { "application/json": { schema: { "$ref": "#/components/schemas/Credential" } } } },
         responses: { "200": { description: "Validation result" } } },
     },
@@ -46,7 +46,7 @@ export const openApiSpec = {
         requestBody: { required: true, content: { "application/json": { schema: {
           type: "object", required: ["provider", "name", "credential"],
           properties: {
-            provider: { type: "string", enum: ["cloudflare", "gcp"] },
+            provider: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod"] },
             name: { type: "string", example: "Production Cloudflare" },
             credential: { "$ref": "#/components/schemas/Credential" },
           },
@@ -155,11 +155,16 @@ export const openApiSpec = {
       Credential: {
         type: "object",
         properties: {
-          provider: { type: "string", enum: ["cloudflare", "gcp"] },
+          provider: { type: "string", enum: ["cloudflare", "gcp", "aws", "runpod"] },
           apiToken: { type: "string", description: "Cloudflare API token" },
           accountId: { type: "string", description: "Cloudflare Account ID" },
           serviceAccountJson: { type: "string", description: "GCP Service Account JSON" },
           projectId: { type: "string", description: "GCP Project ID" },
+          awsAccessKeyId: { type: "string", description: "AWS Access Key ID" },
+          awsSecretAccessKey: { type: "string", description: "AWS Secret Access Key" },
+          awsRegion: { type: "string", description: "AWS Region" },
+          awsRoleArn: { type: "string", description: "AWS IAM Role ARN (cross-account)" },
+          runpodApiKey: { type: "string", description: "RunPod API Key" },
         },
       },
       ThresholdUpdate: {

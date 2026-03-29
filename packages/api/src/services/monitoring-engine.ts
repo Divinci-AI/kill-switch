@@ -21,6 +21,7 @@ function getDefaultKillAction(provider: ProviderId): KillAction {
     case "cloudflare": return "disconnect";
     case "gcp":        return "scale-down";
     case "aws":        return "stop-instances";
+    case "runpod":     return "stop-pod";
   }
 }
 

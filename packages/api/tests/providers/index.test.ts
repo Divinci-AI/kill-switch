@@ -24,6 +24,13 @@ describe("Provider Registry", () => {
       expect(provider!.name).toBe("Amazon Web Services");
     });
 
+    it("returns runpod provider", () => {
+      const provider = getProvider("runpod");
+      expect(provider).toBeDefined();
+      expect(provider!.id).toBe("runpod");
+      expect(provider!.name).toBe("RunPod");
+    });
+
     it("returns undefined for unknown provider", () => {
       const provider = getProvider("azure" as any);
       expect(provider).toBeUndefined();
@@ -31,14 +38,15 @@ describe("Provider Registry", () => {
   });
 
   describe("getAllProviders", () => {
-    it("returns all three providers", () => {
+    it("returns all four providers", () => {
       const providers = getAllProviders();
-      expect(providers).toHaveLength(3);
+      expect(providers).toHaveLength(4);
 
       const ids = providers.map(p => p.id);
       expect(ids).toContain("cloudflare");
       expect(ids).toContain("gcp");
       expect(ids).toContain("aws");
+      expect(ids).toContain("runpod");
     });
 
     it("all providers implement the CloudProvider interface", () => {

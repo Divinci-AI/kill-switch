@@ -509,6 +509,7 @@ export function DashboardPage() {
               { id: "cloudflare", name: "Cloudflare", color: "#f6821f" },
               { id: "gcp", name: "Google Cloud", color: "#4285f4" },
               { id: "aws", name: "AWS", color: "#ff9900" },
+              { id: "runpod", name: "RunPod", color: "#673ab7" },
             ].map(p => (
               <Link key={p.id} to={`/accounts/connect/${p.id}`} style={{
                 display: "flex", alignItems: "center", gap: "10px",

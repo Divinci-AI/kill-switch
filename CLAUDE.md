@@ -74,6 +74,19 @@ Required permissions:
 
 Or use the "Edit Cloudflare Workers" template.
 
+### RunPod API Key Requirements
+Create an API key at https://www.runpod.io/console/user/settings under "API Keys".
+
+Required permissions:
+- Read access to pods, serverless endpoints, and network volumes
+- Write access for auto-kill actions (stop/terminate pods, scale endpoints)
+
+## Supported Cloud Providers
+- **Cloudflare** — Workers, Durable Objects, R2, D1, Queues, Stream, Zones
+- **GCP** — Cloud Run, Compute Engine, GKE, BigQuery, Cloud Functions, Cloud Storage
+- **AWS** — EC2, Lambda, RDS, ECS, EKS, S3, SageMaker, Cost Explorer
+- **RunPod** — GPU Pods (on-demand & spot), Serverless Endpoints, Network Volumes
+
 ## Dogfooding
 - `packages/api/src/dogfood/` — Self-monitoring config and setup script
 - Protected workers (never killed): `kill-switch-cf`, `api-proxy`

@@ -22,6 +22,13 @@ const providers = [
     color: "#ff9900",
     available: true,
   },
+  {
+    id: "runpod",
+    name: "RunPod",
+    description: "Monitor GPU pods, serverless endpoints, and network volumes.",
+    color: "#673ab7",
+    available: true,
+  },
 ];
 
 export function ConnectProvider() {

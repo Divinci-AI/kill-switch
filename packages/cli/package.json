@@ -1,6 +1,6 @@
 {
   "name": "@kill-switch/cli",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Kill Switch CLI — monitor cloud spending, kill runaway services from the terminal",
   "type": "module",
   "bin": {
@@ -24,7 +24,7 @@
     "node": ">=18"
   },
   "files": ["dist", "README.md"],
-  "keywords": ["cloud", "kill-switch", "cost-monitoring", "cloudflare", "aws", "gcp", "finops", "billing", "cli", "devops"],
+  "keywords": ["cloud", "kill-switch", "cost-monitoring", "cloudflare", "aws", "gcp", "runpod", "gpu", "finops", "billing", "cli", "devops"],
   "repository": {
     "type": "git",
     "url": "https://github.com/AiExpanse/kill-switch",

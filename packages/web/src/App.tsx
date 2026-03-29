@@ -9,6 +9,7 @@ import { CloudAccountsList } from "./pages/CloudAccounts/CloudAccountsList";
 import { ConnectCloudflare } from "./pages/CloudAccounts/ConnectCloudflare";
 import { ConnectGCP } from "./pages/CloudAccounts/ConnectGCP";
 import { ConnectAWS } from "./pages/CloudAccounts/ConnectAWS";
+import { ConnectRunPod } from "./pages/CloudAccounts/ConnectRunPod";
 import { ConnectProvider } from "./pages/CloudAccounts/ConnectProvider";
 import { AlertsHistory } from "./pages/Alerts/AlertsHistory";
 import { BillingPage } from "./pages/Billing/BillingPage";
@@ -94,6 +95,7 @@ function AuthenticatedApp() {
             <Route path="/accounts/connect/cloudflare" element={<ConnectCloudflare />} />
             <Route path="/accounts/connect/gcp" element={<ConnectGCP />} />
             <Route path="/accounts/connect/aws" element={<ConnectAWS />} />
+            <Route path="/accounts/connect/runpod" element={<ConnectRunPod />} />
             <Route path="/alerts" element={<AlertsHistory />} />
             <Route path="/activity" element={<ActivityPage />} />
             <Route path="/billing" element={<BillingPage />} />

@@ -5,7 +5,7 @@
  * behind a common interface. Supports both cost and security kill switches.
  */
 
-export type ProviderId = "cloudflare" | "gcp" | "aws";
+export type ProviderId = "cloudflare" | "gcp" | "aws" | "runpod";
 
 // ─── Usage & Cost Monitoring ────────────────────────────────────────────────
 
@@ -84,7 +84,9 @@ export type KillAction =
   | "disable-billing"     // Detach billing account from project (nuclear, GCP)
   | "throttle-lambda"     // Set Lambda reserved concurrency to 0 (reversible, AWS)
   | "deny-scp"            // Apply deny-all Service Control Policy (nuclear, AWS)
-  | "deny-bucket-policy"; // Apply deny-all S3 bucket policy (reversible, AWS)
+  | "deny-bucket-policy" // Apply deny-all S3 bucket policy (reversible, AWS)
+  | "stop-pod"           // Stop a GPU pod — disk persists (reversible, RunPod)
+  | "terminate-pod";     // Terminate a GPU pod — irreversible (RunPod)
 
 export interface ActionResult {
   success: boolean;
@@ -138,6 +140,14 @@ export interface ThresholdConfig {
   sagemakerEndpointCount?: number;    // Max SageMaker endpoint instances
   awsDailyCostUSD?: number;           // Max daily AWS spend
 
+  // ─── RunPod Cost Thresholds ──────────────────────────────────────────────────
+  runpodGPUPodCount?: number;           // Max running GPU pods (on-demand + spot)
+  runpodSpotPodCount?: number;          // Max spot/preemptible pods
+  runpodServerlessWorkers?: number;     // Max active serverless workers
+  runpodServerlessRequestsPerDay?: number; // Max serverless requests/day
+  runpodNetworkVolumeGB?: number;       // Max network volume storage GB
+  runpodDailyCostUSD?: number;          // Max daily RunPod spend
+
   // ─── Shared Thresholds ──────────────────────────────────────────────────────
   monthlySpendLimitUSD?: number;
   requestsPerMinute?: number;       // DDoS detection
@@ -162,6 +172,8 @@ export interface DecryptedCredential {
   awsSecretAccessKey?: string;
   awsRegion?: string;
   awsRoleArn?: string;  // Optional: for cross-account assume-role
+  // RunPod
+  runpodApiKey?: string;
 }
 
 // ─── Forensic Snapshot ──────────────────────────────────────────────────────

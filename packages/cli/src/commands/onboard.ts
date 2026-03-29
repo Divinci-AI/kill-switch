@@ -80,6 +80,21 @@ const PROVIDER_HELP: Record<string, { name: string; fields: string; howToGet: st
     Run: aws configure get region
     Common values: us-east-1, us-west-2, eu-west-1`,
   },
+  runpod: {
+    name: "RunPod",
+    fields: "--runpod-api-key",
+    howToGet: `How to get this value:
+
+  API Key:
+    1. Go to https://www.runpod.io/console/user/settings
+    2. Scroll to "API Keys" section
+    3. Click "Create API Key" (or copy an existing one)
+    4. The key starts with a long alphanumeric string
+
+  Required permissions:
+    - Read access to pods, serverless endpoints, and network volumes
+    - Write access if you want auto-kill actions (stop/terminate pods, scale endpoints)`,
+  },
 };
 
 const AVAILABLE_SHIELDS = [
@@ -111,6 +126,7 @@ export function registerOnboardCommands(program: Command) {
     .option("--access-key <key>", "Access Key ID (AWS)")
     .option("--secret-key <key>", "Secret Access Key (AWS)")
     .option("--region <region>", "Region (AWS, default: us-east-1)")
+    .option("--runpod-api-key <key>", "API Key (RunPod)")
     .option("--shields <presets>", "Comma-separated shield presets to apply (default: cost-runaway)")
     .option("--alert-email <email>", "Email address for alerts")
     .option("--alert-discord <url>", "Discord webhook URL for alerts")
@@ -153,7 +169,7 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
       if (opts.helpProvider) {
         const help = PROVIDER_HELP[opts.helpProvider];
         if (!help) {
-          outputError(`Unknown provider: ${opts.helpProvider}. Use: cloudflare, gcp, aws`, json);
+          outputError(`Unknown provider: ${opts.helpProvider}. Use: cloudflare, gcp, aws, runpod`, json);
           process.exit(1);
         }
         if (json) {
@@ -173,7 +189,7 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
         // Interactive mode if no provider specified
         if (!provider) {
           if (json) {
-            outputError("--provider is required in JSON mode. Use: cloudflare, gcp, aws", json);
+            outputError("--provider is required in JSON mode. Use: cloudflare, gcp, aws, runpod", json);
             process.exit(1);
           }
 
@@ -184,14 +200,15 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
           console.log("  1. cloudflare  — Workers, R2, D1, Queues, Stream");
           console.log("  2. gcp         — Cloud Run, Compute, GKE, BigQuery");
           console.log("  3. aws         — EC2, Lambda, RDS, ECS, S3");
+          console.log("  4. runpod      — GPU Pods, Serverless Endpoints, Network Volumes");
           console.log();
 
-          const choice = await ask("Choose a provider (1/2/3 or name): ");
-          provider = { "1": "cloudflare", "2": "gcp", "3": "aws" }[choice] || choice;
+          const choice = await ask("Choose a provider (1/2/3/4 or name): ");
+          provider = { "1": "cloudflare", "2": "gcp", "3": "aws", "4": "runpod" }[choice] || choice;
         }
 
         if (!PROVIDER_HELP[provider]) {
-          outputError(`Unknown provider: ${provider}. Use: cloudflare, gcp, aws`, json);
+          outputError(`Unknown provider: ${provider}. Use: cloudflare, gcp, aws, runpod`, json);
           process.exit(1);
         }
 
@@ -262,6 +279,18 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
           credential.awsAccessKeyId = accessKey;
           credential.awsSecretAccessKey = secretKey;
           credential.awsRegion = region || "us-east-1";
+        } else if (provider === "runpod") {
+          let apiKey = opts.runpodApiKey;
+
+          if (!apiKey && !json) {
+            console.log("\n  Tip: Create an API Key at https://www.runpod.io/console/user/settings");
+            apiKey = await ask("  RunPod API Key: ");
+          }
+          if (!apiKey) {
+            outputError(`RunPod requires ${PROVIDER_HELP.runpod.fields}`, json);
+            process.exit(1);
+          }
+          credential.runpodApiKey = apiKey;
         }
 
         // 1. Connect cloud account
