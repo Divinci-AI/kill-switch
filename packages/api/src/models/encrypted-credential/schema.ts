@@ -76,7 +76,7 @@ export type EncryptedCredentialDocument = EncryptedCredentialProps & Document;
 
 const encryptedCredentialSchema = new Schema<EncryptedCredentialDocument>({
   guardianAccountId: { type: String, required: true, index: true },
-  provider: { type: String, required: true, enum: ["cloudflare", "gcp", "aws", "mongodb-atlas", "cloud-sql-postgres", "redis"] },
+  provider: { type: String, required: true, enum: ["cloudflare", "gcp", "aws", "runpod", "mongodb-atlas", "cloud-sql-postgres", "redis"] },
   encrypted: { type: String, required: true },
   iv: { type: String, required: true },
   authTag: { type: String, required: true },
