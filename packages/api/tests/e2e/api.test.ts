@@ -123,7 +123,7 @@ vi.mock("../../src/globals/index.js", () => ({
 vi.mock("jose", () => ({
   createRemoteJWKSet: vi.fn(() => vi.fn()),
   jwtVerify: vi.fn(async () => ({
-    payload: { sub: "auth0|test-user-123", email: "test@example.com" },
+    payload: { sub: "user_test123", email: "test@example.com" },
   })),
 }));
 

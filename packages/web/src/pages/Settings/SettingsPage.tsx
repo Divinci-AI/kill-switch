@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useUser } from "@clerk/clerk-react";
 import { api } from "../../api/client";
 
 interface AlertChannel {
@@ -30,7 +30,7 @@ const btnStyle = {
 };
 
 export function SettingsPage() {
-  const { user } = useAuth0();
+  const { user } = useUser();
   const [account, setAccount] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -180,11 +180,11 @@ export function SettingsPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
           <div>
             <label style={labelStyle}>Email</label>
-            <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280", cursor: "not-allowed" }}>{user?.email}</div>
+            <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280", cursor: "not-allowed" }}>{user?.primaryEmailAddress?.emailAddress}</div>
           </div>
           <div>
             <label style={labelStyle}>Name</label>
-            <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280", cursor: "not-allowed" }}>{user?.name || "—"}</div>
+            <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280", cursor: "not-allowed" }}>{user?.fullName || "—"}</div>
           </div>
           <div>
             <label style={labelStyle}>Account Tier</label>
@@ -200,7 +200,7 @@ export function SettingsPage() {
           </div>
         </div>
         <p style={{ fontSize: "12px", color: "#6b7280", marginTop: "12px" }}>
-          Profile details are managed by your identity provider (Auth0).
+          Profile details are managed by your identity provider.
         </p>
       </div>
 

@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Link, Navigate, useLocation } from "react-router-dom";
-import { useAuth0 } from "@auth0/auth0-react";
+import { SignedIn, SignedOut, RedirectToSignIn, UserButton, useAuth, useUser } from "@clerk/clerk-react";
 import { useEffect, useState } from "react";
 import { setTokenGetter, api } from "./api/client";
 import { DashboardPage } from "./pages/Dashboard/DashboardPage";
@@ -15,51 +15,34 @@ import { SettingsPage } from "./pages/Settings/SettingsPage";
 import { AcceptInvitePage } from "./pages/Team/AcceptInvitePage";
 
 function AuthenticatedApp() {
-  const { isAuthenticated, isLoading, loginWithRedirect, logout, getAccessTokenSilently, user } = useAuth0();
+  const { getToken, isLoaded } = useAuth();
+  const { user } = useUser();
   const location = useLocation();
   const [accountReady, setAccountReady] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      setTokenGetter(() => getAccessTokenSilently({
-        authorizationParams: { audience: import.meta.env.VITE_AUTH0_AUDIENCE },
-      }));
+    if (isLoaded) {
+      setTokenGetter(() => getToken());
     }
-  }, [isAuthenticated, getAccessTokenSilently]);
+  }, [isLoaded, getToken]);
 
   // Fetch account status after auth to check onboarding
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isLoaded && user) {
       api.getMe()
         .then(account => {
           setNeedsOnboarding(!account.onboardingCompleted);
           setAccountReady(true);
         })
         .catch(() => {
-          // Account may not exist yet (first request auto-creates it)
           setNeedsOnboarding(true);
           setAccountReady(true);
         });
     }
-  }, [isAuthenticated]);
+  }, [isLoaded, user]);
 
-  // Auto-redirect unauthenticated users to Auth0, preserving the original URL
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      const params = new URLSearchParams(window.location.search);
-      const screenHint = params.get("screen_hint") || "login";
-      // Preserve the full path + search so Auth0 can redirect back after login
-      // (e.g., /invite?token=abc, /billing?plan=pro)
-      const returnTo = window.location.pathname + window.location.search;
-      loginWithRedirect({
-        authorizationParams: { screen_hint: screenHint },
-        appState: { returnTo },
-      });
-    }
-  }, [isLoading, isAuthenticated, loginWithRedirect]);
-
-  if (isLoading || !isAuthenticated || !accountReady) {
+  if (!isLoaded || !accountReady) {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100vh", background: "#0c1229", color: "#fff" }}>
         <p>Loading...</p>
@@ -82,7 +65,7 @@ function AuthenticatedApp() {
       <nav style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 24px", height: "56px", background: "rgba(51,51,51,0.55)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
           <span style={{ fontSize: "20px" }}>&#9889;</span>
-          <Link to="/" style={{ fontFamily: "Outfit, sans-serif", fontWeight: "600", fontSize: "18px", color: "#fff", textDecoration: "none" }}>Guardian</Link>
+          <Link to="/" style={{ fontFamily: "Outfit, sans-serif", fontWeight: "600", fontSize: "18px", color: "#fff", textDecoration: "none" }}>Kill Switch</Link>
         </div>
         <div style={{ display: "flex", gap: "20px", alignItems: "center" }}>
           <Link to="/" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Dashboard</Link>
@@ -90,13 +73,7 @@ function AuthenticatedApp() {
           <Link to="/alerts" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Alerts</Link>
           <Link to="/billing" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Billing</Link>
           <Link to="/settings" style={{ color: "#c4c5ca", textDecoration: "none", fontSize: "14px" }}>Settings</Link>
-          <span style={{ color: "#6b7280", fontSize: "13px" }}>{user?.email}</span>
-          <button
-            onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
-            style={{ background: "rgba(255,255,255,0.08)", color: "#c4c5ca", border: "1px solid rgba(255,255,255,0.1)", padding: "4px 12px", borderRadius: "6px", fontSize: "13px", cursor: "pointer" }}
-          >
-            Sign Out
-          </button>
+          <UserButton afterSignOutUrl="/" />
         </div>
       </nav>
 
@@ -123,7 +100,12 @@ function AuthenticatedApp() {
 export function App() {
   return (
     <BrowserRouter>
-      <AuthenticatedApp />
+      <SignedIn>
+        <AuthenticatedApp />
+      </SignedIn>
+      <SignedOut>
+        <RedirectToSignIn />
+      </SignedOut>
     </BrowserRouter>
   );
 }

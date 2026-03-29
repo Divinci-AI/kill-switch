@@ -7,10 +7,10 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "deploy": "npm run build && wrangler pages deploy dist --project-name kill-switch-app"
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
-    "@auth0/auth0-react": "^2.2.0",
+    "@clerk/clerk-react": "^5.61.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.22.0",

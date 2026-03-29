@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth0 } from "@auth0/auth0-react";
+import { useUser } from "@clerk/clerk-react";
 import { api } from "../../api/client";
 
 type Step = "welcome" | "provider" | "connect" | "thresholds" | "alerts" | "done";
@@ -53,10 +53,11 @@ const btnSecondary = {
 };
 
 export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
-  const { user } = useAuth0();
+  const { user } = useUser();
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>("welcome");
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [selectedProviders, setSelectedProviders] = useState<string[]>([]);
+  const [currentProviderIndex, setCurrentProviderIndex] = useState(0);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -72,7 +73,15 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
   const [alertType, setAlertType] = useState<"email" | "discord" | "slack" | "">("email");
   const [alertValue, setAlertValue] = useState("");
 
-  const firstName = user?.name?.split(" ")[0] || user?.email?.split("@")[0] || "there";
+  const firstName = user?.firstName || user?.primaryEmailAddress?.emailAddress?.split("@")[0] || "there";
+
+  const selectedProvider = selectedProviders[currentProviderIndex] || null;
+
+  const toggleProvider = (id: string) => {
+    setSelectedProviders(prev =>
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
+    );
+  };
 
   const getProviderFields = () => {
     switch (selectedProvider) {
@@ -122,7 +131,19 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
         name: accountName || validation?.accountName || `${selectedProvider} account`,
         credential: buildCredential(),
       });
-      setStep("thresholds");
+      // Move to the next provider, or to thresholds if all done
+      const nextIndex = currentProviderIndex + 1;
+      if (nextIndex < selectedProviders.length) {
+        setCurrentProviderIndex(nextIndex);
+        setAccountName("");
+        setField1("");
+        setField2("");
+        setField3("");
+        setValidation(null);
+        setError("");
+      } else {
+        setStep("thresholds");
+      }
     } catch (e: any) {
       setError(e.message);
     }
@@ -214,33 +235,44 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
       {step === "provider" && (
         <div>
           <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", marginBottom: "8px" }}>
-            Choose your cloud provider
+            Choose your cloud providers
           </h2>
           <p style={{ color: "#8b8fa3", marginBottom: "32px", fontSize: "15px" }}>
-            You can add more providers later. Pick the one you want to protect first.
+            Select all the providers you want to protect. You'll connect each one next.
           </p>
           <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "32px" }}>
-            {providers.map(p => (
-              <div
-                key={p.id}
-                onClick={() => setSelectedProvider(p.id)}
-                style={selectedProvider === p.id ? selectedCardStyle : cardStyle}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-                  <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: p.color, flexShrink: 0 }} />
-                  <div>
-                    <div style={{ color: "#fff", fontFamily: "Outfit, sans-serif", fontWeight: "600", fontSize: "16px" }}>{p.name}</div>
-                    <div style={{ color: "#6b7280", fontSize: "13px", marginTop: "2px" }}>{p.desc}</div>
+            {providers.map(p => {
+              const selected = selectedProviders.includes(p.id);
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => toggleProvider(p.id)}
+                  style={selected ? selectedCardStyle : cardStyle}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                    <div style={{
+                      width: "20px", height: "20px", borderRadius: "4px", flexShrink: 0,
+                      border: selected ? "2px solid #5ce2e7" : "2px solid rgba(255,255,255,0.15)",
+                      background: selected ? "rgba(92,226,231,0.15)" : "transparent",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "12px", color: "#5ce2e7",
+                    }}>
+                      {selected ? "\u2713" : ""}
+                    </div>
+                    <div>
+                      <div style={{ color: "#fff", fontFamily: "Outfit, sans-serif", fontWeight: "600", fontSize: "16px" }}>{p.name}</div>
+                      <div style={{ color: "#6b7280", fontSize: "13px", marginTop: "2px" }}>{p.desc}</div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div style={{ display: "flex", gap: "12px" }}>
             <button onClick={() => setStep("welcome")} style={btnSecondary}>Back</button>
-            <button onClick={() => { setStep("connect"); setValidation(null); setField1(""); setField2(""); setField3(""); setError(""); }}
-              disabled={!selectedProvider} style={{ ...btnPrimary, opacity: selectedProvider ? 1 : 0.5 }}>
-              Continue
+            <button onClick={() => { setCurrentProviderIndex(0); setStep("connect"); setValidation(null); setField1(""); setField2(""); setField3(""); setError(""); }}
+              disabled={selectedProviders.length === 0} style={{ ...btnPrimary, opacity: selectedProviders.length > 0 ? 1 : 0.5 }}>
+              Continue ({selectedProviders.length} selected)
             </button>
           </div>
         </div>
@@ -251,10 +283,19 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
         <div>
           <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "24px", fontWeight: "700", color: "#fff", marginBottom: "8px" }}>
             Connect {providers.find(p => p.id === selectedProvider)?.name}
+            {selectedProviders.length > 1 && <span style={{ color: "#6b7280", fontWeight: "400", fontSize: "16px" }}> ({currentProviderIndex + 1} of {selectedProviders.length})</span>}
           </h2>
-          <p style={{ color: "#8b8fa3", marginBottom: "32px", fontSize: "15px" }}>
+          <p style={{ color: "#8b8fa3", marginBottom: "16px", fontSize: "15px" }}>
             Your credentials are encrypted at rest and never shared.
           </p>
+
+          {/* CLI / AI alternative tip */}
+          <div style={{ padding: "12px 16px", background: "rgba(92,226,231,0.06)", border: "1px solid rgba(92,226,231,0.15)", borderRadius: "8px", marginBottom: "28px", fontSize: "13px", color: "#8b8fa3", lineHeight: "1.5" }}>
+            <span style={{ color: "#5ce2e7", fontWeight: "600" }}>Tip:</span> You can also set this up via the{" "}
+            <a href="https://kill-switch.net/docs/cli" target="_blank" rel="noopener" style={{ color: "#5ce2e7", textDecoration: "underline" }}>Kill Switch CLI</a>
+            {" "}or pass your API key to your AI coding assistant to configure it for you.
+          </div>
+
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             <div>
               <label style={labelStyle}>Account Name (optional)</label>
@@ -263,15 +304,70 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
             <div>
               <label style={labelStyle}>{getProviderFields().label1}</label>
               <input style={inputStyle} placeholder={getProviderFields().placeholder1} value={field1} onChange={e => setField1(e.target.value)} />
+              {/* Where to find it — visual hint */}
+              {selectedProvider === "cloudflare" && (
+                <div style={{ marginTop: "8px" }}>
+                  <div style={{ fontSize: "12px", color: "#6b7280", marginBottom: "6px" }}>Find it in your browser URL bar on any Cloudflare dashboard page:</div>
+                  <div style={{ background: "#1a1a2e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "8px 12px", display: "flex", alignItems: "center", gap: "8px", fontFamily: "JetBrains Mono, monospace", fontSize: "12px" }}>
+                    <span style={{ color: "#6b7280" }}>dash.cloudflare.com/</span>
+                    <span style={{ color: "#5ce2e7", background: "rgba(92,226,231,0.12)", padding: "2px 6px", borderRadius: "4px", border: "1px dashed rgba(92,226,231,0.3)" }}>your-account-id</span>
+                    <span style={{ color: "#6b7280" }}>/example.com</span>
+                  </div>
+                </div>
+              )}
+              {selectedProvider === "gcp" && (
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "6px" }}>
+                  Find it at <a href="https://console.cloud.google.com/home/dashboard" target="_blank" rel="noopener" style={{ color: "#5ce2e7" }}>console.cloud.google.com</a> in the project selector dropdown, or run <code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 6px", borderRadius: "4px", color: "#c4c5ca" }}>gcloud config get-value project</code>
+                </div>
+              )}
+              {selectedProvider === "aws" && (
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "6px" }}>
+                  Find it in <a href="https://console.aws.amazon.com/iam/home#/security_credentials" target="_blank" rel="noopener" style={{ color: "#5ce2e7" }}>IAM &rarr; Security Credentials</a>, or run <code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 6px", borderRadius: "4px", color: "#c4c5ca" }}>aws configure get aws_access_key_id</code>
+                </div>
+              )}
             </div>
             <div>
               <label style={labelStyle}>{getProviderFields().label2}</label>
-              <input style={{ ...inputStyle }} type="password" placeholder={getProviderFields().placeholder2} value={field2} onChange={e => setField2(e.target.value)} />
+              {/* Secure vault indicator */}
+              <div style={{ position: "relative" }}>
+                <input style={{ ...inputStyle, paddingRight: "140px" }} type="password" placeholder={getProviderFields().placeholder2} value={field2} onChange={e => setField2(e.target.value)} />
+                <div style={{ position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)", display: "flex", alignItems: "center", gap: "4px", fontSize: "11px", color: "#6b7280", pointerEvents: "none" }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                  AES-256 encrypted
+                </div>
+              </div>
+              {selectedProvider === "cloudflare" && (
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "6px", lineHeight: "1.6" }}>
+                  <strong style={{ color: "#c4c5ca" }}>Important:</strong> Use an <strong style={{ color: "#c4c5ca" }}>API Token</strong> (not Global API Key).{" "}
+                  <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener" style={{ color: "#5ce2e7" }}>Create one here</a> with these permissions:
+                  <div style={{ marginTop: "6px", padding: "8px 12px", background: "rgba(255,255,255,0.04)", borderRadius: "6px", fontFamily: "JetBrains Mono, monospace", fontSize: "11px", lineHeight: "1.8" }}>
+                    <div><span style={{ color: "#5ce2e7" }}>Account &rarr; Account Analytics</span> &rarr; Read</div>
+                    <div><span style={{ color: "#5ce2e7" }}>Account &rarr; Workers Scripts</span> &rarr; Edit</div>
+                    <div><span style={{ color: "#5ce2e7" }}>Account &rarr; Workers R2 Storage</span> &rarr; Read</div>
+                    <div><span style={{ color: "#5ce2e7" }}>Account &rarr; D1</span> &rarr; Read</div>
+                    <div><span style={{ color: "#5ce2e7" }}>Zone &rarr; Zone</span> &rarr; Read</div>
+                  </div>
+                  <div style={{ marginTop: "4px" }}>Or use the <strong style={{ color: "#c4c5ca" }}>"Edit Cloudflare Workers"</strong> template as a starting point.</div>
+                </div>
+              )}
+              {selectedProvider === "gcp" && (
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "6px" }}>
+                  Create a service account at <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener" style={{ color: "#5ce2e7" }}>IAM &rarr; Service Accounts</a>, then download the JSON key.
+                </div>
+              )}
+              {selectedProvider === "aws" && (
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "6px" }}>
+                  Found alongside your Access Key ID. Only shown once at creation — if lost, create a new key pair.
+                </div>
+              )}
             </div>
             {getProviderFields().showField3 && (
               <div>
                 <label style={labelStyle}>{(getProviderFields() as any).label3}</label>
                 <input style={inputStyle} placeholder={(getProviderFields() as any).placeholder3} value={field3} onChange={e => setField3(e.target.value)} />
+                <div style={{ fontSize: "12px", color: "#6b7280", marginTop: "6px" }}>
+                  Run <code style={{ background: "rgba(255,255,255,0.08)", padding: "1px 6px", borderRadius: "4px", color: "#c4c5ca" }}>aws configure get region</code> or check your AWS console URL.
+                </div>
               </div>
             )}
 
@@ -367,7 +463,7 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
           </p>
           <div style={{ display: "flex", gap: "8px", marginBottom: "24px" }}>
             {(["email", "discord", "slack"] as const).map(type => (
-              <button key={type} onClick={() => { setAlertType(type); setAlertValue(type === "email" ? (user?.email || "") : ""); }}
+              <button key={type} onClick={() => { setAlertType(type); setAlertValue(type === "email" ? (user?.primaryEmailAddress?.emailAddress || "") : ""); }}
                 style={{
                   padding: "8px 20px", borderRadius: "8px", fontSize: "14px", fontWeight: "600", cursor: "pointer",
                   background: alertType === type ? "rgba(92,226,231,0.1)" : "rgba(255,255,255,0.05)",
@@ -386,7 +482,7 @@ export function OnboardingPage({ onComplete }: { onComplete: () => void }) {
               <input
                 style={inputStyle}
                 type={alertType === "email" ? "email" : "url"}
-                placeholder={alertType === "email" ? user?.email || "you@example.com" : "https://hooks.example.com/..."}
+                placeholder={alertType === "email" ? user?.primaryEmailAddress?.emailAddress || "you@example.com" : "https://hooks.example.com/..."}
                 value={alertValue}
                 onChange={e => setAlertValue(e.target.value)}
               />

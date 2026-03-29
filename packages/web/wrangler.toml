@@ -1,6 +1,12 @@
 name = "kill-switch-app"
 compatibility_date = "2024-09-23"
-pages_build_output_dir = "./dist"
 
-# Custom domain configured via CF Pages:
-#   app.kill-switch.net
+# Serve built React SPA from ./dist
+[assets]
+directory = "./dist"
+not_found_handling = "single-page-application"
+
+# Custom domain
+[[routes]]
+pattern = "app.kill-switch.net"
+custom_domain = true

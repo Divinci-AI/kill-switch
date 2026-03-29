@@ -1,14 +1,14 @@
 /**
  * Guardian API Client
  *
- * Authenticated fetch wrapper that attaches Auth0 JWT to all requests.
+ * Authenticated fetch wrapper that attaches Clerk JWT to all requests.
  */
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8090";
 
-let getAccessToken: (() => Promise<string>) | null = null;
+let getAccessToken: (() => Promise<string | null>) | null = null;
 
-export function setTokenGetter(fn: () => Promise<string>) {
+export function setTokenGetter(fn: () => Promise<string | null>) {
   getAccessToken = fn;
 }
 

@@ -1,17 +1,16 @@
 /**
- * Auth0 JWT Middleware
+ * Clerk JWT Middleware
  *
- * Validates JWT tokens from Auth0 and attaches user info to requests.
- * Uses JWKS for token verification (same pattern as public-api).
+ * Validates JWT tokens from Clerk and attaches user info to requests.
+ * Uses JWKS for token verification.
  */
 
 import type { Request, Response, NextFunction } from "express";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 
-const AUTH0_DOMAIN = process.env.AUTH0_DOMAIN || "divinci-staging.us.auth0.com";
-const AUTH0_AUDIENCE = process.env.AUTH0_AUDIENCE || "https://guardian-api.divinci.app";
+const CLERK_ISSUER = process.env.CLERK_ISSUER || "https://moving-herring-47.clerk.accounts.dev";
 
-const JWKS = createRemoteJWKSet(new URL(`https://${AUTH0_DOMAIN}/.well-known/jwks.json`));
+const JWKS = createRemoteJWKSet(new URL(`${CLERK_ISSUER}/.well-known/jwks.json`));
 
 export interface AuthenticatedRequest extends Request {
   userId?: string;
@@ -25,7 +24,7 @@ export interface AuthenticatedRequest extends Request {
 }
 
 /**
- * Require valid Auth0 JWT token.
+ * Require valid Clerk JWT token.
  * Extracts userId from the `sub` claim.
  */
 export async function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
@@ -72,18 +71,17 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
     }
   }
 
-  // Auth0 JWT path
+  // Clerk JWT path
   try {
     const { payload } = await jwtVerify(token, JWKS, {
-      issuer: `https://${AUTH0_DOMAIN}/`,
-      audience: AUTH0_AUDIENCE,
+      issuer: CLERK_ISSUER,
     });
 
     req.userId = payload.sub;
     req.auth = {
       sub: payload.sub as string,
-      email: payload.email as string | undefined,
-      permissions: payload.permissions as string[] | undefined,
+      email: (payload as any).email as string | undefined,
+      permissions: (payload as any).permissions as string[] | undefined,
     };
 
     next();

@@ -21,6 +21,7 @@ import { registerAlertCommands } from "./commands/alerts.js";
 import { registerKillCommands } from "./commands/kill.js";
 import { registerAnalyticsCommands } from "./commands/analytics.js";
 import { registerConfigCommands } from "./commands/config-cmd.js";
+import { registerOnboardCommands } from "./commands/onboard.js";
 
 const program = new Command();
 
@@ -41,5 +42,6 @@ registerAlertCommands(program);
 registerKillCommands(program);
 registerAnalyticsCommands(program);
 registerConfigCommands(program);
+registerOnboardCommands(program);
 
 program.parse();
