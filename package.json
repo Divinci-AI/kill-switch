@@ -21,7 +21,7 @@
     "deploy:kill-switch": "cd packages/kill-switch-cf && npm run deploy",
     "deploy:kill-switch-aws": "cd packages/kill-switch-aws && npm run deploy",
     "deploy:agent": "cd packages/agent && npm run deploy",
-    "deploy:web": "cd packages/web && VITE_API_URL=https://api.kill-switch.net npm run deploy",
+    "deploy:web": "cd packages/web && VITE_API_URL=https://api.kill-switch.net VITE_CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsua2lsbC1zd2l0Y2gubmV0JA npm run deploy",
     "deploy:site": "cd site && wrangler deploy",
     "dogfood": "tsx packages/api/src/dogfood/setup.ts"
   }
