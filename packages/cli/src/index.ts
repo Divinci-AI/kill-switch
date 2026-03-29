@@ -12,6 +12,8 @@
  */
 
 import { Command } from "commander";
+import { KillSwitchClient } from "@kill-switch/sdk";
+import { resolveApiKey, resolveApiUrl } from "./config.js";
 import { registerAuthCommands } from "./commands/auth.js";
 import { registerAccountCommands } from "./commands/accounts.js";
 import { registerRuleCommands } from "./commands/rules.js";
@@ -22,6 +24,10 @@ import { registerKillCommands } from "./commands/kill.js";
 import { registerAnalyticsCommands } from "./commands/analytics.js";
 import { registerConfigCommands } from "./commands/config-cmd.js";
 import { registerOnboardCommands } from "./commands/onboard.js";
+import { registerOrgCommands } from "./commands/orgs.js";
+import { registerActivityCommands } from "./commands/activity.js";
+
+import type { ClientFactory } from "./types.js";
 
 const program = new Command();
 
@@ -33,15 +39,29 @@ program
   .option("--api-key <key>", "API key (overrides config and env)")
   .option("--api-url <url>", "API URL (overrides config and env)");
 
-registerAuthCommands(program);
-registerAccountCommands(program);
-registerRuleCommands(program);
-registerShieldCommands(program);
-registerCheckCommands(program);
-registerAlertCommands(program);
-registerKillCommands(program);
-registerAnalyticsCommands(program);
+/**
+ * Create an SDK client with the resolved apiKey/apiUrl.
+ * Called lazily when a command runs (after options are parsed).
+ */
+const createClient: ClientFactory = () => {
+  const opts = program.opts();
+  return new KillSwitchClient({
+    apiKey: resolveApiKey(opts.apiKey),
+    baseUrl: resolveApiUrl(opts.apiUrl),
+  });
+};
+
+registerAuthCommands(program, createClient);
+registerAccountCommands(program, createClient);
+registerRuleCommands(program, createClient);
+registerShieldCommands(program, createClient);
+registerCheckCommands(program, createClient);
+registerAlertCommands(program, createClient);
+registerKillCommands(program, createClient);
+registerAnalyticsCommands(program, createClient);
 registerConfigCommands(program);
-registerOnboardCommands(program);
+registerOnboardCommands(program, createClient);
+registerOrgCommands(program, createClient);
+registerActivityCommands(program, createClient);
 
 program.parse();

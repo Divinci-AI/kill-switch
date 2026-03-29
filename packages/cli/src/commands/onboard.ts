@@ -3,28 +3,12 @@
  *
  * One-command setup for connecting cloud providers, applying protection rules,
  * and configuring alerts. Designed for both human use and AI agent automation.
- *
- * Human use (interactive prompts):
- *   kill-switch onboard
- *
- * AI agent use (non-interactive):
- *   kill-switch onboard \
- *     --provider cloudflare \
- *     --account-id YOUR_CF_ACCOUNT_ID \
- *     --token YOUR_CF_API_TOKEN \
- *     --name "Production" \
- *     --shields cost-runaway,ddos \
- *     --alert-email you@example.com
- *
- * Multi-provider (run multiple times or comma-separate):
- *   kill-switch onboard --provider cloudflare --token ... --account-id ...
- *   kill-switch onboard --provider aws --access-key ... --secret-key ... --region us-east-1
  */
 
 import { Command } from "commander";
-import { apiRequest } from "../api-client.js";
 import { outputJson, outputError } from "../output.js";
 import { createInterface } from "readline";
+import type { ClientFactory } from "../types.js";
 
 const PROVIDER_HELP: Record<string, { name: string; fields: string; howToGet: string }> = {
   cloudflare: {
@@ -95,6 +79,37 @@ const PROVIDER_HELP: Record<string, { name: string; fields: string; howToGet: st
     - Read access to pods, serverless endpoints, and network volumes
     - Write access if you want auto-kill actions (stop/terminate pods, scale endpoints)`,
   },
+  redis: {
+    name: "Redis",
+    fields: "--redis-url (self-hosted) or --redis-cloud-key + --redis-cloud-secret + --subscription-id",
+    howToGet: `Redis supports three deployment types:
+
+  Self-hosted Redis:
+    Provide a connection URL: --redis-url redis://user:pass@host:6379
+
+  Redis Cloud:
+    1. Go to https://app.redislabs.com/#/account/api-keys
+    2. Create an API key pair (Account Key + Secret Key)
+    3. Find your subscription ID in the console
+    Use: --redis-cloud-key KEY --redis-cloud-secret SECRET --subscription-id ID
+
+  AWS ElastiCache:
+    Use AWS credentials + cluster ID:
+    --access-key AKIA... --secret-key ... --region us-east-1 --cluster-id my-cluster`,
+  },
+  mongodb: {
+    name: "MongoDB",
+    fields: "--mongodb-uri (self-hosted) or --atlas-public-key + --atlas-private-key + --atlas-project-id",
+    howToGet: `MongoDB supports two deployment types:
+
+  MongoDB Atlas:
+    1. Go to Organization > Access Manager > API Keys
+    2. Create a key with "Project Read Only" + "Project Cluster Manager" roles
+    Use: --atlas-public-key PUB --atlas-private-key PRIV --atlas-project-id PROJ --cluster-name Cluster0
+
+  Self-hosted MongoDB:
+    Provide a URI: --mongodb-uri mongodb+srv://user:pass@host/db`,
+  },
 };
 
 const AVAILABLE_SHIELDS = [
@@ -112,7 +127,7 @@ function ask(question: string): Promise<string> {
   });
 }
 
-export function registerOnboardCommands(program: Command) {
+export function registerOnboardCommands(program: Command, createClient: ClientFactory) {
   program
     .command("onboard")
     .alias("setup")
@@ -183,6 +198,7 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
       }
 
       try {
+        const client = createClient();
         let provider = opts.provider;
         let name = opts.name;
 
@@ -295,11 +311,12 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
 
         // 1. Connect cloud account
         if (!json) console.log(`\nConnecting ${PROVIDER_HELP[provider].name}...`);
-        const account = await apiRequest("/cloud-accounts", {
-          method: "POST",
-          body: { provider, name, credential },
+        const account = await client.accounts.create({
+          provider: provider as any,
+          name,
+          credential: credential as any,
         });
-        if (!json) console.log(`\u2713 Connected: ${account.name || account._id}`);
+        if (!json) console.log(`\u2713 Connected: ${account.name || account.id}`);
 
         // 2. Apply shields
         if (!opts.skipShields) {
@@ -310,7 +327,7 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
           if (!json) console.log(`\nApplying ${shieldList.length} shield(s)...`);
           for (const shield of shieldList) {
             try {
-              await apiRequest(`/rules/presets/${shield}`, { method: "POST", body: {} });
+              await client.rules.applyPreset(shield);
               if (!json) console.log(`  \u2713 ${shield}`);
             } catch (err: any) {
               if (!json) console.log(`  \u2717 ${shield}: ${err.message}`);
@@ -341,7 +358,7 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
           if (channels.length > 0) {
             if (!json) console.log("Setting up alerts...");
             try {
-              await apiRequest("/alerts/channels", { method: "PUT", body: { channels } });
+              await client.alerts.updateChannels(channels);
               if (!json) console.log(`  \u2713 ${channels.length} alert channel(s) configured`);
             } catch (err: any) {
               if (!json) console.log(`  \u2717 Alerts: ${err.message}`);
@@ -351,7 +368,7 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
 
         // 4. Complete onboarding
         try {
-          await apiRequest("/accounts/me", { method: "PATCH", body: { onboardingCompleted: true } });
+          await client.account.update({ onboardingCompleted: true });
         } catch {
           // Non-critical
         }
@@ -360,7 +377,7 @@ Available shields: ${AVAILABLE_SHIELDS.join(", ")}
           outputJson({
             success: true,
             provider,
-            accountId: account._id || account.id,
+            accountId: account.id,
             accountName: account.name,
           });
         } else {
