@@ -109,6 +109,32 @@ export async function initPostgresTables(): Promise<void> {
     ON guardian_alerts(guardian_account_id, created_at DESC);
   `);
 
+  // Activity log for audit trail
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS activity_log (
+      id BIGSERIAL PRIMARY KEY,
+      org_id TEXT NOT NULL,
+      actor_user_id TEXT NOT NULL,
+      actor_email TEXT,
+      action TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      resource_id TEXT,
+      details JSONB,
+      ip_address TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_activity_org
+    ON activity_log(org_id, created_at DESC);
+  `);
+
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_activity_actor
+    ON activity_log(actor_user_id, created_at DESC);
+  `);
+
   console.error("[guardian] PostgreSQL tables initialized");
 }
 

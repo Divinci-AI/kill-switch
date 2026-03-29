@@ -7,13 +7,15 @@
 import { Router } from "express";
 import { GuardianAccountModel } from "../../models/guardian-account/schema.js";
 import { sendAlerts } from "../../services/alerting.js";
+import { requirePermission } from "../../middleware/permissions.js";
+import { logActivity } from "../../services/activity-logger.js";
 
 export const alertRouter = Router();
 
 /**
  * GET /alerts/channels — Get configured alert channels
  */
-alertRouter.get("/channels", async (req, res, next) => {
+alertRouter.get("/channels", requirePermission("alerts:read"), async (req, res, next) => {
   try {
     const guardianAccountId = (req as any).guardianAccountId;
     const account = await GuardianAccountModel.findById(guardianAccountId);
@@ -42,7 +44,7 @@ alertRouter.get("/channels", async (req, res, next) => {
 /**
  * PUT /alerts/channels — Update alert channels
  */
-alertRouter.put("/channels", async (req, res, next) => {
+alertRouter.put("/channels", requirePermission("alerts:write"), async (req, res, next) => {
   try {
     const guardianAccountId = (req as any).guardianAccountId;
     const { channels } = req.body;
@@ -61,6 +63,12 @@ alertRouter.put("/channels", async (req, res, next) => {
       return res.status(404).json({ error: "Account not found" });
     }
 
+    logActivity({
+      orgId: guardianAccountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+      action: "alert_channel.update", resourceType: "alert_channel",
+      details: { channelCount: account.alertChannels.length }, ipAddress: req.ip,
+    });
+
     res.json({ updated: true, channelCount: account.alertChannels.length });
   } catch (e) {
     next(e);
@@ -70,7 +78,7 @@ alertRouter.put("/channels", async (req, res, next) => {
 /**
  * POST /alerts/test — Send a test alert to all configured channels
  */
-alertRouter.post("/test", async (req, res, next) => {
+alertRouter.post("/test", requirePermission("alerts:write"), async (req, res, next) => {
   try {
     const guardianAccountId = (req as any).guardianAccountId;
     const account = await GuardianAccountModel.findById(guardianAccountId);

@@ -7,6 +7,7 @@
 import { Router, raw } from "express";
 import Stripe from "stripe";
 import { GuardianAccountModel } from "../../models/guardian-account/schema.js";
+import { requirePermission } from "../../middleware/permissions.js";
 import type { GuardianTier } from "../../models/guardian-account/schema.js";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_API_SECRET_KEY || "";
@@ -67,7 +68,7 @@ billingRouter.get("/plans", (_req, res) => {
 /**
  * GET /billing/status — Current billing status
  */
-billingRouter.get("/status", async (req, res, next) => {
+billingRouter.get("/status", requirePermission("billing:read"), async (req, res, next) => {
   try {
     const accountId = (req as any).guardianAccountId;
     const account = await GuardianAccountModel.findById(accountId);
@@ -101,7 +102,7 @@ billingRouter.get("/status", async (req, res, next) => {
 /**
  * POST /billing/checkout — Create Stripe Checkout session
  */
-billingRouter.post("/checkout", async (req, res, next) => {
+billingRouter.post("/checkout", requirePermission("billing:manage"), async (req, res, next) => {
   try {
     if (!stripe) return res.status(503).json({ error: "Stripe not configured" });
 
@@ -160,7 +161,7 @@ billingRouter.post("/checkout", async (req, res, next) => {
 /**
  * POST /billing/portal — Create Stripe Customer Portal session (manage subscription)
  */
-billingRouter.post("/portal", async (req, res, next) => {
+billingRouter.post("/portal", requirePermission("billing:manage"), async (req, res, next) => {
   try {
     if (!stripe) return res.status(503).json({ error: "Stripe not configured" });
 

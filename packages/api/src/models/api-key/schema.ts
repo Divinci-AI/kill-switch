@@ -94,6 +94,11 @@ export async function deleteApiKey(id: string, guardianAccountId: string): Promi
   return result !== null;
 }
 
+export async function deleteAllApiKeysForAccount(guardianAccountId: string): Promise<number> {
+  const result = await PersonalApiKeyModel.deleteMany({ guardianAccountId });
+  return result.deletedCount || 0;
+}
+
 function hashKey(key: string): string {
   return createHash("sha256").update(key).digest("hex");
 }

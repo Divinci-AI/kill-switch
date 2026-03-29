@@ -9,6 +9,8 @@
  */
 
 import { Router } from "express";
+import { requirePermission } from "../../middleware/permissions.js";
+import { logActivity } from "../../services/activity-logger.js";
 import {
   initiateKillSequence,
   advanceKillSequence,
@@ -31,7 +33,7 @@ export const databaseRouter = Router();
  * Body: { provider, ...credentialFields }
  * Returns: { credentialId }
  */
-databaseRouter.post("/credentials", async (req: any, res, next) => {
+databaseRouter.post("/credentials", requirePermission("kill_switch:trigger"), async (req: any, res, next) => {
   try {
     const guardianAccountId = req.guardianAccountId;
     const { provider, ...credentialFields } = req.body as DatabaseCredential & Record<string, any>;
@@ -66,7 +68,7 @@ databaseRouter.post("/credentials", async (req: any, res, next) => {
 /**
  * DELETE /database/credentials/:id — Delete stored database credentials
  */
-databaseRouter.delete("/credentials/:id", async (req: any, res, next) => {
+databaseRouter.delete("/credentials/:id", requirePermission("kill_switch:trigger"), async (req: any, res, next) => {
   try {
     const deleted = await deleteCredential(req.params.id, req.guardianAccountId);
     if (!deleted) return res.status(404).json({ error: "Credential not found" });
@@ -78,7 +80,7 @@ databaseRouter.delete("/credentials/:id", async (req: any, res, next) => {
  * POST /database/kill — Initiate a database kill sequence
  * Body: { credentialId, trigger, actions? }
  */
-databaseRouter.post("/kill", async (req: any, res, next) => {
+databaseRouter.post("/kill", requirePermission("kill_switch:trigger"), async (req: any, res, next) => {
   try {
     const guardianAccountId = req.guardianAccountId;
     const { credentialId, trigger, actions } = req.body as {
@@ -104,6 +106,12 @@ databaseRouter.post("/kill", async (req: any, res, next) => {
     const sequence = initiateKillSequence(credential, trigger, actions);
     (sequence as any).guardianAccountId = guardianAccountId;
 
+    logActivity({
+      orgId: guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
+      action: "kill_switch.trigger", resourceType: "database_kill", resourceId: sequence.id,
+      details: { trigger }, ipAddress: req.ip,
+    });
+
     res.status(201).json({
       sequenceId: sequence.id,
       status: sequence.status,
@@ -117,7 +125,7 @@ databaseRouter.post("/kill", async (req: any, res, next) => {
  * POST /database/kill/:id/advance — Execute the next step
  * Body: { credentialId?, humanApproval? }
  */
-databaseRouter.post("/kill/:id/advance", async (req: any, res, next) => {
+databaseRouter.post("/kill/:id/advance", requirePermission("kill_switch:trigger"), async (req: any, res, next) => {
   try {
     const guardianAccountId = req.guardianAccountId;
     const sequence = getKillSequence(req.params.id);
@@ -139,6 +147,12 @@ databaseRouter.post("/kill/:id/advance", async (req: any, res, next) => {
 
     const updated = await advanceKillSequence(req.params.id, credential, humanApproval);
 
+    logActivity({
+      orgId: guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
+      action: "kill_switch.advance", resourceType: "database_kill", resourceId: req.params.id,
+      details: { step: updated.currentStep }, ipAddress: req.ip,
+    });
+
     res.json({
       sequenceId: updated.id,
       status: updated.status,
@@ -157,7 +171,7 @@ databaseRouter.post("/kill/:id/advance", async (req: any, res, next) => {
 /**
  * POST /database/kill/:id/abort — Abort a kill sequence
  */
-databaseRouter.post("/kill/:id/abort", (req: any, res) => {
+databaseRouter.post("/kill/:id/abort", requirePermission("kill_switch:trigger"), (req: any, res) => {
   const guardianAccountId = req.guardianAccountId;
   const sequence = getKillSequence(req.params.id);
 
@@ -167,13 +181,20 @@ databaseRouter.post("/kill/:id/abort", (req: any, res) => {
   }
 
   const aborted = abortKillSequence(req.params.id);
+
+  logActivity({
+    orgId: guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
+    action: "kill_switch.abort", resourceType: "database_kill", resourceId: req.params.id,
+    ipAddress: req.ip,
+  });
+
   res.json({ sequenceId: aborted!.id, status: aborted!.status, message: "Kill sequence aborted" });
 });
 
 /**
  * GET /database/kill/:id — Get status of a kill sequence (ownership verified)
  */
-databaseRouter.get("/kill/:id", (req: any, res) => {
+databaseRouter.get("/kill/:id", requirePermission("kill_switch:read"), (req: any, res) => {
   const guardianAccountId = req.guardianAccountId;
   const sequence = getKillSequence(req.params.id);
 
@@ -188,7 +209,7 @@ databaseRouter.get("/kill/:id", (req: any, res) => {
 /**
  * GET /database/kill — List active kill sequences (filtered to current user)
  */
-databaseRouter.get("/kill", (req: any, res) => {
+databaseRouter.get("/kill", requirePermission("kill_switch:read"), (req: any, res) => {
   const guardianAccountId = req.guardianAccountId;
   const all = listActiveSequences();
   const mine = all.filter(s => (s as any).guardianAccountId === guardianAccountId);

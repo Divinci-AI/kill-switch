@@ -19,7 +19,11 @@ import { billingRouter } from "./routes/billing/index.js";
 import { teamRouter } from "./routes/team/index.js";
 import { authRouter } from "./routes/auth/index.js";
 import { GuardianAccountModel } from "./models/guardian-account/schema.js";
-import { requireAuth, resolveGuardianAccount } from "./middleware/auth.js";
+import { requireAuth, resolveOrg } from "./middleware/auth.js";
+import { requirePermission } from "./middleware/permissions.js";
+import { logActivity } from "./services/activity-logger.js";
+import { activityRouter } from "./routes/activity/index.js";
+import { orgsRouter } from "./routes/orgs/index.js";
 import { runCheckCycle } from "./services/monitoring-engine.js";
 import { openApiSpec } from "./routes/docs/openapi.js";
 import { getUsageHistory, getAlertHistory, getAnalyticsOverview } from "./globals/index.js";
@@ -153,7 +157,7 @@ export function createApp() {
   });
 
   // Auth middleware for protected routes
-  const authStack = [requireAuth, resolveGuardianAccount];
+  const authStack = [requireAuth, resolveOrg];
   app.use("/cloud-accounts", ...authStack);
   app.use("/alerts", ...authStack);
   app.use("/rules", ...authStack);
@@ -161,6 +165,8 @@ export function createApp() {
   app.use("/billing", ...authStack);
   app.use("/team", ...authStack);
   app.use("/auth", ...authStack);
+  app.use("/activity", ...authStack);
+  app.use("/orgs", requireAuth, resolveOrg);
 
   // Authenticated routes
   app.use("/cloud-accounts", cloudAccountRouter);
@@ -170,9 +176,11 @@ export function createApp() {
   app.use("/billing", billingRouter);
   app.use("/team", teamRouter);
   app.use("/auth", authRouter);
+  app.use("/activity", activityRouter);
+  app.use("/orgs", orgsRouter);
 
   // Manual check (requires auth — runs only the authenticated user's accounts)
-  app.post("/check", requireAuth, resolveGuardianAccount, async (req, res, next) => {
+  app.post("/check", requireAuth, resolveOrg, requirePermission("check:trigger"), async (req, res, next) => {
     try {
       const guardianAccountId = (req as any).guardianAccountId;
       const results = await runCheckCycle(guardianAccountId);
@@ -186,24 +194,58 @@ export function createApp() {
       const ownerUserId = req.userId; // From JWT, not request body
       const { name } = req.body;
       if (!name) return res.status(400).json({ error: "Missing name" });
-      const existing = await GuardianAccountModel.findOne({ ownerUserId });
+      const existing = await GuardianAccountModel.findOne({ ownerUserId, type: "personal" });
       if (existing) return res.json({ id: existing._id, name: existing.name, tier: existing.tier, existing: true });
-      const account = await GuardianAccountModel.create({ ownerUserId, name, tier: "free", alertChannels: [], settings: { checkIntervalMinutes: 360, dailyReportEnabled: false } });
+      const account = await GuardianAccountModel.create({
+        ownerUserId, name, type: "personal", tier: "free",
+        alertChannels: [], settings: { checkIntervalMinutes: 360, dailyReportEnabled: false },
+      });
       res.status(201).json({ id: account._id, name: account.name, tier: account.tier });
     } catch (e) { next(e); }
   });
 
-  app.get("/accounts/me", requireAuth, resolveGuardianAccount, async (req: any, res, next) => {
+  app.get("/accounts/me", requireAuth, resolveOrg, requirePermission("settings:read"), async (req: any, res, next) => {
     try {
       const account = await GuardianAccountModel.findById(req.guardianAccountId).lean();
       if (!account) return res.status(404).json({ error: "Account not found" });
+
+      // Fetch user's org list for the org switcher
+      const { TeamMemberModel } = await import("./models/team/schema.js");
+      const { UserProfileModel } = await import("./models/user-profile/schema.js");
+
+      const ownedAccounts = await GuardianAccountModel.find({ ownerUserId: req.userId }).lean();
+      const memberships = await TeamMemberModel.find({ userId: req.userId }).lean();
+      const memberOrgIds = memberships
+        .map((m: any) => m.guardianAccountId)
+        .filter((id: string) => !ownedAccounts.some(a => a._id.toString() === id));
+      const memberAccounts = memberOrgIds.length > 0
+        ? await GuardianAccountModel.find({ _id: { $in: memberOrgIds } }).lean()
+        : [];
+
+      const orgs = [
+        ...ownedAccounts.map((a: any) => ({
+          id: a._id.toString(), name: a.name, slug: a.slug,
+          type: a.type || "personal", tier: a.tier, role: "owner",
+        })),
+        ...memberAccounts.map((a: any) => {
+          const m = memberships.find((m: any) => m.guardianAccountId === a._id.toString());
+          return {
+            id: a._id.toString(), name: a.name, slug: a.slug,
+            type: a.type || "personal", tier: a.tier, role: m?.role || "viewer",
+          };
+        }),
+      ];
+
+      const profile = await UserProfileModel.findOne({ userId: req.userId });
+      const activeOrgId = profile?.activeOrgId || req.guardianAccountId;
+
       // Strip sensitive fields
       const { stripeCustomerId: _s, ...safe } = account as any;
-      res.json(safe);
+      res.json({ ...safe, orgs, activeOrgId, teamRole: req.teamRole });
     } catch (e) { next(e); }
   });
 
-  app.patch("/accounts/me", requireAuth, resolveGuardianAccount, async (req: any, res, next) => {
+  app.patch("/accounts/me", requireAuth, resolveOrg, requirePermission("settings:write"), async (req: any, res, next) => {
     try {
       const allowedFields: Record<string, boolean> = { name: true, onboardingCompleted: true, "settings.timezone": true, "settings.dailyReportEnabled": true };
       const updates: Record<string, any> = {};
@@ -220,13 +262,20 @@ export function createApp() {
       if (Object.keys(updates).length === 0) return res.status(400).json({ error: "No valid fields to update" });
       const account = await GuardianAccountModel.findByIdAndUpdate(req.guardianAccountId, { $set: updates }, { new: true }).lean();
       if (!account) return res.status(404).json({ error: "Account not found" });
+
+      logActivity({
+        orgId: req.guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
+        action: "settings.update", resourceType: "account", resourceId: req.guardianAccountId,
+        details: updates, ipAddress: req.ip,
+      });
+
       const { stripeCustomerId: _s, ...safe } = account as any;
       res.json(safe);
     } catch (e) { next(e); }
   });
 
   // Analytics overview (aggregate FinOps data across all accounts)
-  app.get("/analytics/overview", requireAuth, resolveGuardianAccount, async (req: any, res, next) => {
+  app.get("/analytics/overview", requireAuth, resolveOrg, requirePermission("cloud_accounts:read"), async (req: any, res, next) => {
     try {
       const days = parseInt(req.query.days as string) || 30;
       const overview = await getAnalyticsOverview(req.guardianAccountId, days);
@@ -235,7 +284,7 @@ export function createApp() {
   });
 
   // Usage history (requires auth + ownership check)
-  app.get("/cloud-accounts/:id/usage", requireAuth, resolveGuardianAccount, async (req: any, res, next) => {
+  app.get("/cloud-accounts/:id/usage", requireAuth, resolveOrg, requirePermission("cloud_accounts:read"), async (req: any, res, next) => {
     try {
       // Lazy import to avoid circular deps
       const { CloudAccountModel } = await import("./models/cloud-account/schema.js");

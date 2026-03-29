@@ -187,3 +187,8 @@ export async function deleteCredential(credentialId: string, guardianAccountId?:
   const result = await EncryptedCredentialModel.findOneAndDelete(query);
   return result !== null;
 }
+
+export async function deleteAllCredentialsForAccount(guardianAccountId: string): Promise<number> {
+  const result = await EncryptedCredentialModel.deleteMany({ guardianAccountId });
+  return result.deletedCount || 0;
+}

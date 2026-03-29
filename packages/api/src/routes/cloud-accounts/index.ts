@@ -10,6 +10,8 @@ import { storeCredential, deleteCredential } from "../../models/encrypted-creden
 import { getProvider } from "../../providers/index.js";
 import { runCheckCycle } from "../../services/monitoring-engine.js";
 import { enforceTierLimits } from "../billing/index.js";
+import { requirePermission } from "../../middleware/permissions.js";
+import { logActivity } from "../../services/activity-logger.js";
 import type { DecryptedCredential } from "../../providers/types.js";
 
 export const cloudAccountRouter = Router();
@@ -21,7 +23,7 @@ cloudAccountRouter.post("/", enforceTierLimits("cloudAccounts"));
  * POST /cloud-accounts — Connect a new cloud provider
  * Body: { provider, name, credential: { apiToken, accountId } | { serviceAccountJson, projectId } }
  */
-cloudAccountRouter.post("/", async (req, res, next) => {
+cloudAccountRouter.post("/", requirePermission("cloud_accounts:write"), async (req, res, next) => {
   try {
     const { provider: providerId, name, credential } = req.body;
     const guardianAccountId = (req as any).guardianAccountId;
@@ -60,6 +62,12 @@ cloudAccountRouter.post("/", async (req, res, next) => {
       autoDelete: false,
     });
 
+    logActivity({
+      orgId: guardianAccountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+      action: "cloud_account.create", resourceType: "cloud_account", resourceId: cloudAccount._id.toString(),
+      details: { provider: providerId, name }, ipAddress: req.ip,
+    });
+
     res.status(201).json({
       id: cloudAccount._id,
       provider: cloudAccount.provider,
@@ -77,7 +85,7 @@ cloudAccountRouter.post("/", async (req, res, next) => {
 /**
  * GET /cloud-accounts — List all connected accounts
  */
-cloudAccountRouter.get("/", async (req, res, next) => {
+cloudAccountRouter.get("/", requirePermission("cloud_accounts:read"), async (req, res, next) => {
   try {
     const guardianAccountId = (req as any).guardianAccountId;
     const accounts = await CloudAccountModel.find({ guardianAccountId }).lean();
@@ -105,7 +113,7 @@ cloudAccountRouter.get("/", async (req, res, next) => {
 /**
  * GET /cloud-accounts/:id — Get details
  */
-cloudAccountRouter.get("/:id", async (req, res, next) => {
+cloudAccountRouter.get("/:id", requirePermission("cloud_accounts:read"), async (req, res, next) => {
   try {
     const guardianAccountId = (req as any).guardianAccountId;
     const account = await CloudAccountModel.findOne({ _id: req.params.id, guardianAccountId }).lean();
@@ -121,7 +129,7 @@ cloudAccountRouter.get("/:id", async (req, res, next) => {
 /**
  * PUT /cloud-accounts/:id — Update thresholds, protected services, etc.
  */
-cloudAccountRouter.put("/:id", async (req, res, next) => {
+cloudAccountRouter.put("/:id", requirePermission("cloud_accounts:write"), async (req, res, next) => {
   try {
     const { thresholds, protectedServices, autoDisconnect, autoDelete, name, status } = req.body;
     const update: any = {};
@@ -141,6 +149,12 @@ cloudAccountRouter.put("/:id", async (req, res, next) => {
       return res.status(404).json({ error: "Cloud account not found" });
     }
 
+    logActivity({
+      orgId: guardianAccountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+      action: "cloud_account.update", resourceType: "cloud_account", resourceId: req.params.id,
+      details: update, ipAddress: req.ip,
+    });
+
     res.json(account);
   } catch (e) {
     next(e);
@@ -150,7 +164,7 @@ cloudAccountRouter.put("/:id", async (req, res, next) => {
 /**
  * DELETE /cloud-accounts/:id — Disconnect and delete credential
  */
-cloudAccountRouter.delete("/:id", async (req, res, next) => {
+cloudAccountRouter.delete("/:id", requirePermission("cloud_accounts:delete"), async (req, res, next) => {
   try {
     const guardianAccountId = (req as any).guardianAccountId;
     const account = await CloudAccountModel.findOne({ _id: req.params.id, guardianAccountId });
@@ -163,6 +177,12 @@ cloudAccountRouter.delete("/:id", async (req, res, next) => {
     // Delete cloud account
     await CloudAccountModel.findByIdAndDelete(req.params.id);
 
+    logActivity({
+      orgId: guardianAccountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+      action: "cloud_account.delete", resourceType: "cloud_account", resourceId: req.params.id,
+      details: { provider: account.provider, name: account.name }, ipAddress: req.ip,
+    });
+
     res.json({ deleted: true });
   } catch (e) {
     next(e);
@@ -172,7 +192,7 @@ cloudAccountRouter.delete("/:id", async (req, res, next) => {
 /**
  * POST /cloud-accounts/:id/check — Manual check trigger
  */
-cloudAccountRouter.post("/:id/check", async (req, res, next) => {
+cloudAccountRouter.post("/:id/check", requirePermission("check:trigger"), async (req, res, next) => {
   try {
     const guardianAccountId = (req as any).guardianAccountId;
     const results = await runCheckCycle(guardianAccountId);

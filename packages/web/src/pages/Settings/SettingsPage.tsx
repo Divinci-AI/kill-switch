@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useUser } from "@clerk/clerk-react";
 import { api } from "../../api/client";
+import { useOrg } from "../../context/OrgContext";
 
 interface AlertChannel {
   type: string;
@@ -31,7 +32,11 @@ const btnStyle = {
 
 export function SettingsPage() {
   const { user } = useUser();
+  const { activeOrg, teamRole, refreshOrgs } = useOrg();
   const [account, setAccount] = useState<any>(null);
+  const [orgName, setOrgName] = useState("");
+  const [orgSlug, setOrgSlug] = useState("");
+  const [savingOrg, setSavingOrg] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -76,6 +81,8 @@ export function SettingsPage() {
         setAccount(data);
         setTimezone(data.settings?.timezone || "");
         setDailyReport(data.settings?.dailyReportEnabled || false);
+        setOrgName(data.name || "");
+        setOrgSlug(data.slug || "");
         // Load team data for team/enterprise tiers
         if (data.tier === "team" || data.tier === "enterprise") {
           loadTeam();
@@ -212,6 +219,83 @@ export function SettingsPage() {
           Profile details are managed by your identity provider.
         </p>
       </div>
+
+      {/* ── Organization ────────────────────────────────── */}
+      {activeOrg && (
+        <div style={sectionStyle}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+            <h2 style={{ fontFamily: "Outfit, sans-serif", fontSize: "18px", fontWeight: "600", color: "#fff", margin: 0 }}>Organization</h2>
+            <span style={{
+              padding: "2px 10px", borderRadius: "4px", fontSize: "12px", fontWeight: 600,
+              background: teamRole === "owner" ? "rgba(92, 226, 231, 0.12)" : "rgba(255,255,255,0.06)",
+              color: teamRole === "owner" ? "#5ce2e7" : "#999",
+            }}>
+              {teamRole?.toUpperCase() || "OWNER"}
+            </span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div>
+              <label style={labelStyle}>Name</label>
+              {teamRole === "owner" ? (
+                <input
+                  style={inputStyle}
+                  value={orgName}
+                  onChange={e => setOrgName(e.target.value)}
+                  placeholder="Organization name"
+                />
+              ) : (
+                <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280", cursor: "not-allowed" }}>{orgName}</div>
+              )}
+            </div>
+            <div>
+              <label style={labelStyle}>Slug</label>
+              {teamRole === "owner" ? (
+                <input
+                  style={inputStyle}
+                  value={orgSlug}
+                  onChange={e => setOrgSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                  placeholder="org-slug"
+                />
+              ) : (
+                <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280", cursor: "not-allowed" }}>{orgSlug}</div>
+              )}
+            </div>
+            <div>
+              <label style={labelStyle}>Type</label>
+              <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)", color: "#6b7280" }}>
+                {activeOrg.type === "organization" ? "Organization" : "Personal Workspace"}
+              </div>
+            </div>
+            <div>
+              <label style={labelStyle}>Tier</label>
+              <div style={{ ...inputStyle, background: "rgba(255,255,255,0.02)" }}>
+                <span style={{ color: "#5ce2e7", fontWeight: "600" }}>{activeOrg.tier?.toUpperCase()}</span>
+              </div>
+            </div>
+          </div>
+          {teamRole === "owner" && (
+            <button
+              style={{ ...btnStyle, marginTop: "16px" }}
+              disabled={savingOrg}
+              onClick={async () => {
+                setSavingOrg(true);
+                try {
+                  if (activeOrg?.id) {
+                    await api.updateOrg(activeOrg.id, { name: orgName, slug: orgSlug });
+                  }
+                  await refreshOrgs();
+                  flash("Organization updated");
+                } catch (e: any) {
+                  flash(e.message, "error");
+                }
+                setSavingOrg(false);
+              }}
+            >
+              {savingOrg ? "Saving..." : "Save Organization"}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ── Account Settings ───────────────────────────── */}
       <div style={sectionStyle}>

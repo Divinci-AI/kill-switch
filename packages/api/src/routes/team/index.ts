@@ -8,6 +8,8 @@
 import { Router } from "express";
 import { GuardianAccountModel } from "../../models/guardian-account/schema.js";
 import { TeamMemberModel, TeamInvitationModel, generateInviteToken } from "../../models/team/schema.js";
+import { requirePermission } from "../../middleware/permissions.js";
+import { logActivity } from "../../services/activity-logger.js";
 import type { TeamRole } from "../../models/team/schema.js";
 
 export const teamRouter = Router();
@@ -27,24 +29,10 @@ async function requireTeamTier(req: any, res: any, next: any) {
   next();
 }
 
-/** Role check — only owner/admin can manage team */
-function requireRole(...allowed: TeamRole[]) {
-  return async (req: any, res: any, next: any) => {
-    const teamRole = req.teamRole;
-    // Account owner always has full access
-    const account = req.guardianAccount || await GuardianAccountModel.findById(req.guardianAccountId);
-    if (account?.ownerUserId === req.userId) return next();
-    if (!teamRole || !allowed.includes(teamRole)) {
-      return res.status(403).json({ error: "Insufficient permissions" });
-    }
-    next();
-  };
-}
-
 /**
  * GET /team/members — List team members and pending invitations
  */
-teamRouter.get("/members", requireTeamTier, async (req: any, res, next) => {
+teamRouter.get("/members", requireTeamTier, requirePermission("team:read"), async (req: any, res, next) => {
   try {
     const accountId = req.guardianAccountId;
     const account = req.guardianAccount;
@@ -89,7 +77,7 @@ teamRouter.get("/members", requireTeamTier, async (req: any, res, next) => {
 /**
  * POST /team/invite — Send a team invitation
  */
-teamRouter.post("/invite", requireTeamTier, requireRole("owner", "admin"), async (req: any, res, next) => {
+teamRouter.post("/invite", requireTeamTier, requirePermission("team:manage"), async (req: any, res, next) => {
   try {
     const { email, role = "member" } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
@@ -144,6 +132,12 @@ teamRouter.post("/invite", requireTeamTier, requireRole("owner", "admin"), async
       expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
+    logActivity({
+      orgId: accountId, actorUserId: req.userId, actorEmail: req.auth?.email,
+      action: "team.invite", resourceType: "team_invitation", resourceId: invitation._id.toString(),
+      details: { email, role }, ipAddress: req.ip,
+    });
+
     res.status(201).json({
       invitation: {
         id: invitation._id,
@@ -152,7 +146,6 @@ teamRouter.post("/invite", requireTeamTier, requireRole("owner", "admin"), async
         token: invitation.token,
         expiresAt: invitation.expiresAt,
       },
-      // The frontend can construct the invite link
       acceptUrl: `/team/invite/accept?token=${token}`,
     });
   } catch (e) { next(e); }
@@ -200,6 +193,12 @@ teamRouter.post("/invite/accept", async (req: any, res, next) => {
       acceptedAt: Date.now(),
     });
 
+    logActivity({
+      orgId: invitation.guardianAccountId, actorUserId: req.userId,
+      action: "team.join", resourceType: "team_member", resourceId: member._id.toString(),
+      details: { email: invitation.email, role: invitation.role }, ipAddress: req.ip,
+    });
+
     res.json({
       joined: true,
       member: {
@@ -215,7 +214,7 @@ teamRouter.post("/invite/accept", async (req: any, res, next) => {
 /**
  * PATCH /team/members/:memberId — Update a team member's role
  */
-teamRouter.patch("/members/:memberId", requireTeamTier, requireRole("owner", "admin"), async (req: any, res, next) => {
+teamRouter.patch("/members/:memberId", requireTeamTier, requirePermission("team:manage"), async (req: any, res, next) => {
   try {
     const { role } = req.body;
     const validRoles: TeamRole[] = ["admin", "member", "viewer"];
@@ -231,6 +230,12 @@ teamRouter.patch("/members/:memberId", requireTeamTier, requireRole("owner", "ad
 
     if (!member) return res.status(404).json({ error: "Team member not found" });
 
+    logActivity({
+      orgId: req.guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
+      action: "team.role_change", resourceType: "team_member", resourceId: req.params.memberId,
+      details: { email: member.email, newRole: role }, ipAddress: req.ip,
+    });
+
     res.json({
       updated: true,
       member: { id: member._id, email: member.email, role: member.role },
@@ -241,7 +246,7 @@ teamRouter.patch("/members/:memberId", requireTeamTier, requireRole("owner", "ad
 /**
  * DELETE /team/members/:memberId — Remove a team member
  */
-teamRouter.delete("/members/:memberId", requireTeamTier, requireRole("owner", "admin"), async (req: any, res, next) => {
+teamRouter.delete("/members/:memberId", requireTeamTier, requirePermission("team:manage"), async (req: any, res, next) => {
   try {
     const member = await TeamMemberModel.findOneAndDelete({
       _id: req.params.memberId,
@@ -250,6 +255,12 @@ teamRouter.delete("/members/:memberId", requireTeamTier, requireRole("owner", "a
 
     if (!member) return res.status(404).json({ error: "Team member not found" });
 
+    logActivity({
+      orgId: req.guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
+      action: "team.remove", resourceType: "team_member", resourceId: req.params.memberId,
+      details: { email: member.email }, ipAddress: req.ip,
+    });
+
     res.json({ removed: true, email: member.email });
   } catch (e) { next(e); }
 });
@@ -257,7 +268,7 @@ teamRouter.delete("/members/:memberId", requireTeamTier, requireRole("owner", "a
 /**
  * DELETE /team/invitations/:invitationId — Revoke a pending invitation
  */
-teamRouter.delete("/invitations/:invitationId", requireTeamTier, requireRole("owner", "admin"), async (req: any, res, next) => {
+teamRouter.delete("/invitations/:invitationId", requireTeamTier, requirePermission("team:manage"), async (req: any, res, next) => {
   try {
     const invitation = await TeamInvitationModel.findOneAndUpdate(
       { _id: req.params.invitationId, guardianAccountId: req.guardianAccountId, status: "pending" },

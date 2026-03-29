@@ -15,6 +15,7 @@ const JWKS = createRemoteJWKSet(new URL(`${CLERK_ISSUER}/.well-known/jwks.json`)
 export interface AuthenticatedRequest extends Request {
   userId?: string;
   guardianAccountId?: string;
+  orgType?: "personal" | "organization";
   teamRole?: "owner" | "admin" | "member" | "viewer";
   auth?: {
     sub: string;
@@ -40,6 +41,8 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
     if (devAccountId || devUserId) {
       req.guardianAccountId = devAccountId;
       req.userId = devUserId || "dev-user";
+      req.teamRole = (req.headers["x-guardian-role"] as any) || "owner";
+      req.orgType = "personal";
       return next();
     }
   }
@@ -92,12 +95,42 @@ export async function requireAuth(req: AuthenticatedRequest, res: Response, next
 }
 
 /**
- * Resolve the GuardianAccount for the authenticated user.
- * Creates one if it doesn't exist (auto-provisioning).
+ * Resolve the organization (GuardianAccount) for the authenticated user.
+ *
+ * Resolution order:
+ * 1. X-Org-Id header (explicit org selection from frontend)
+ * 2. UserProfile.activeOrgId (last-used org)
+ * 3. Personal workspace fallback (ownerUserId match)
+ * 4. Team membership fallback
+ * 5. Auto-create personal workspace
+ *
+ * Sets req.guardianAccountId, req.teamRole, and req.orgType.
  */
-export async function resolveGuardianAccount(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
-  if (req.guardianAccountId) {
-    return next(); // Already set (dev mode)
+export async function resolveOrg(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+  if (req.guardianAccountId && req.teamRole) {
+    return next(); // Already fully resolved (dev mode)
+  }
+
+  // API key auth sets guardianAccountId but not teamRole — resolve role
+  if (req.guardianAccountId && !req.teamRole && req.userId) {
+    try {
+      const { GuardianAccountModel } = await import("../models/guardian-account/schema.js");
+      const { TeamMemberModel } = await import("../models/team/schema.js");
+      const account = await GuardianAccountModel.findById(req.guardianAccountId);
+      if (account?.ownerUserId === req.userId) {
+        req.teamRole = "owner";
+        req.orgType = (account.type as any) || "personal";
+      } else {
+        const membership = await TeamMemberModel.findOne({ userId: req.userId, guardianAccountId: req.guardianAccountId });
+        req.teamRole = membership?.role || "viewer";
+        req.orgType = (account?.type as any) || "personal";
+      }
+      return next();
+    } catch (error: any) {
+      console.error("[guardian] Failed to resolve role for API key:", error.message);
+      res.status(500).json({ error: "Failed to resolve account" });
+      return;
+    }
   }
 
   if (!req.userId) {
@@ -106,42 +139,127 @@ export async function resolveGuardianAccount(req: AuthenticatedRequest, res: Res
   }
 
   try {
-    // Lazy import to avoid circular deps
     const { GuardianAccountModel } = await import("../models/guardian-account/schema.js");
+    const { TeamMemberModel } = await import("../models/team/schema.js");
+    const { UserProfileModel } = await import("../models/user-profile/schema.js");
 
-    // First check if user owns an account
-    let account = await GuardianAccountModel.findOne({ ownerUserId: req.userId });
+    // 1. Explicit org selection via header
+    const orgIdHeader = req.headers["x-org-id"] as string | undefined;
+    if (orgIdHeader) {
+      const resolved = await resolveOrgById(orgIdHeader, req.userId, GuardianAccountModel, TeamMemberModel);
+      if (resolved) {
+        req.guardianAccountId = resolved.accountId;
+        req.teamRole = resolved.role;
+        req.orgType = resolved.orgType;
+        return next();
+      }
+      // Header specified an org the user doesn't have access to — reject
+      res.status(403).json({ error: "You don't have access to this organization" });
+      return;
+    }
+
+    // 2. UserProfile.activeOrgId
+    const profile = await UserProfileModel.findOne({ userId: req.userId });
+    if (profile?.activeOrgId) {
+      const resolved = await resolveOrgById(profile.activeOrgId, req.userId, GuardianAccountModel, TeamMemberModel);
+      if (resolved) {
+        req.guardianAccountId = resolved.accountId;
+        req.teamRole = resolved.role;
+        req.orgType = resolved.orgType;
+        return next();
+      }
+    }
+
+    // 3. Fall back to personal workspace
+    let account = await GuardianAccountModel.findOne({
+      ownerUserId: req.userId,
+      $or: [{ type: "personal" }, { type: { $exists: false } }],
+    });
 
     if (account) {
       req.guardianAccountId = account._id.toString();
       req.teamRole = "owner";
+      req.orgType = (account.type as any) || "personal";
       return next();
     }
 
-    // Check if user is a team member of another account
-    const { TeamMemberModel } = await import("../models/team/schema.js");
+    // 4. Check team memberships
     const membership = await TeamMemberModel.findOne({ userId: req.userId });
     if (membership) {
+      const memberAccount = await GuardianAccountModel.findById(membership.guardianAccountId);
       req.guardianAccountId = membership.guardianAccountId;
       req.teamRole = membership.role;
+      req.orgType = (memberAccount?.type as any) || "personal";
       return next();
     }
 
-    // No account and no team membership — auto-create a new account
-    account = await GuardianAccountModel.create({
-      ownerUserId: req.userId,
-      name: req.auth?.email || `User ${req.userId.substring(0, 8)}`,
-      tier: "free",
-      alertChannels: [],
-      settings: { checkIntervalMinutes: 360, dailyReportEnabled: false },
-    });
-    console.error(`[guardian] Auto-created account for ${req.userId}`);
+    // 5. Auto-create personal workspace (use findOneAndUpdate+upsert to avoid race duplicates)
+    const { generateSlug } = await import("../models/guardian-account/schema.js");
+    const autoName = req.auth?.email || `User ${req.userId.substring(0, 8)}`;
+    account = await GuardianAccountModel.findOneAndUpdate(
+      { ownerUserId: req.userId, type: "personal" },
+      {
+        $setOnInsert: {
+          ownerUserId: req.userId,
+          name: autoName,
+          slug: generateSlug(autoName),
+          type: "personal",
+          tier: "free",
+          alertChannels: [],
+          settings: { checkIntervalMinutes: 360, dailyReportEnabled: false },
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      },
+      { upsert: true, new: true }
+    );
+    console.error(`[guardian] Resolved personal workspace for ${req.userId}`);
 
-    req.guardianAccountId = account._id.toString();
+    // Also create a UserProfile
+    await UserProfileModel.findOneAndUpdate(
+      { userId: req.userId },
+      {
+        userId: req.userId,
+        email: req.auth?.email || "",
+        name: req.auth?.email || "",
+        activeOrgId: account!._id.toString(),
+      },
+      { upsert: true }
+    );
+
+    req.guardianAccountId = account!._id.toString();
     req.teamRole = "owner";
+    req.orgType = "personal";
     next();
   } catch (error: any) {
-    console.error("[guardian] Failed to resolve Guardian account:", error.message);
+    console.error("[guardian] Failed to resolve org:", error.message);
     res.status(500).json({ error: "Failed to resolve account" });
   }
 }
+
+/** Helper: resolve an org by ID and determine the user's role in it */
+async function resolveOrgById(
+  orgId: string,
+  userId: string,
+  GuardianAccountModel: any,
+  TeamMemberModel: any
+): Promise<{ accountId: string; role: "owner" | "admin" | "member" | "viewer"; orgType: "personal" | "organization" } | null> {
+  const account = await GuardianAccountModel.findById(orgId);
+  if (!account) return null;
+
+  // Owner check
+  if (account.ownerUserId === userId) {
+    return { accountId: account._id.toString(), role: "owner", orgType: account.type || "personal" };
+  }
+
+  // Team member check
+  const membership = await TeamMemberModel.findOne({ userId, guardianAccountId: orgId });
+  if (membership) {
+    return { accountId: account._id.toString(), role: membership.role, orgType: account.type || "personal" };
+  }
+
+  return null;
+}
+
+/** @deprecated Use resolveOrg instead. Kept for backwards compatibility. */
+export const resolveGuardianAccount = resolveOrg;

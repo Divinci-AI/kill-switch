@@ -12,6 +12,8 @@
 
 import { Router } from "express";
 import { PRESET_RULES } from "../../services/rule-engine.js";
+import { requirePermission } from "../../middleware/permissions.js";
+import { logActivity } from "../../services/activity-logger.js";
 import type { KillSwitchRule } from "../../providers/types.js";
 
 export const rulesRouter = Router();
@@ -29,7 +31,7 @@ function getAccountRules(accountId: string): Map<string, KillSwitchRule> {
 /**
  * GET /rules — List all rules for the account
  */
-rulesRouter.get("/", (req, res) => {
+rulesRouter.get("/", requirePermission("rules:read"), (req, res) => {
   const accountId = (req as any).guardianAccountId;
   const rules = Array.from(getAccountRules(accountId).values());
   res.json({ rules });
@@ -56,7 +58,7 @@ rulesRouter.get("/presets", (_req, res) => {
 /**
  * POST /rules/presets/:presetId — Apply a preset rule with optional customization
  */
-rulesRouter.post("/presets/:presetId", (req, res) => {
+rulesRouter.post("/presets/:presetId", requirePermission("rules:write"), (req, res) => {
   const accountId = (req as any).guardianAccountId;
   const { presetId } = req.params;
   const customValues = req.body; // Optional threshold overrides
@@ -93,13 +95,20 @@ rulesRouter.post("/presets/:presetId", (req, res) => {
   }
 
   getAccountRules(accountId).set(rule.id, rule);
+
+  logActivity({
+    orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+    action: "rule.create", resourceType: "rule", resourceId: rule.id,
+    details: { preset: presetId, name: rule.name }, ipAddress: req.ip,
+  });
+
   res.status(201).json({ rule });
 });
 
 /**
  * POST /rules — Create a custom rule
  */
-rulesRouter.post("/", (req, res) => {
+rulesRouter.post("/", requirePermission("rules:write"), (req, res) => {
   const accountId = (req as any).guardianAccountId;
   const rule = req.body as KillSwitchRule;
 
@@ -108,13 +117,20 @@ rulesRouter.post("/", (req, res) => {
   }
 
   getAccountRules(accountId).set(rule.id, rule);
+
+  logActivity({
+    orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+    action: "rule.create", resourceType: "rule", resourceId: rule.id,
+    details: { name: rule.name }, ipAddress: req.ip,
+  });
+
   res.status(201).json({ rule });
 });
 
 /**
  * PUT /rules/:ruleId — Update a rule
  */
-rulesRouter.put("/:ruleId", (req, res) => {
+rulesRouter.put("/:ruleId", requirePermission("rules:write"), (req, res) => {
   const accountId = (req as any).guardianAccountId;
   const rules = getAccountRules(accountId);
   const existing = rules.get(req.params.ruleId);
@@ -125,22 +141,36 @@ rulesRouter.put("/:ruleId", (req, res) => {
 
   const updated = { ...existing, ...req.body, id: existing.id };
   rules.set(updated.id, updated);
+
+  logActivity({
+    orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+    action: "rule.update", resourceType: "rule", resourceId: updated.id,
+    details: { name: updated.name }, ipAddress: req.ip,
+  });
+
   res.json({ rule: updated });
 });
 
 /**
  * DELETE /rules/:ruleId — Delete a rule
  */
-rulesRouter.delete("/:ruleId", (req, res) => {
+rulesRouter.delete("/:ruleId", requirePermission("rules:delete"), (req, res) => {
   const accountId = (req as any).guardianAccountId;
   const deleted = getAccountRules(accountId).delete(req.params.ruleId);
+
+  logActivity({
+    orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+    action: "rule.delete", resourceType: "rule", resourceId: req.params.ruleId,
+    ipAddress: req.ip,
+  });
+
   res.json({ deleted });
 });
 
 /**
  * POST /rules/:ruleId/toggle — Enable/disable a rule
  */
-rulesRouter.post("/:ruleId/toggle", (req, res) => {
+rulesRouter.post("/:ruleId/toggle", requirePermission("rules:write"), (req, res) => {
   const accountId = (req as any).guardianAccountId;
   const rule = getAccountRules(accountId).get(req.params.ruleId);
 
@@ -149,6 +179,13 @@ rulesRouter.post("/:ruleId/toggle", (req, res) => {
   }
 
   rule.enabled = !rule.enabled;
+
+  logActivity({
+    orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+    action: "rule.toggle", resourceType: "rule", resourceId: req.params.ruleId,
+    details: { enabled: rule.enabled }, ipAddress: req.ip,
+  });
+
   res.json({ rule });
 });
 
@@ -159,7 +196,7 @@ rulesRouter.post("/:ruleId/toggle", (req, res) => {
  * Accepts a description of the threat and recommended actions.
  * Can create a temporary rule or execute immediate actions.
  */
-rulesRouter.post("/agent/trigger", async (req, res, next) => {
+rulesRouter.post("/agent/trigger", requirePermission("kill_switch:trigger"), async (req, res, next) => {
   try {
     const accountId = (req as any).guardianAccountId;
     const {
@@ -194,6 +231,12 @@ rulesRouter.post("/agent/trigger", async (req, res, next) => {
     };
 
     getAccountRules(accountId).set(rule.id, rule);
+
+    logActivity({
+      orgId: accountId, actorUserId: (req as any).userId, actorEmail: (req as any).auth?.email,
+      action: "kill_switch.trigger", resourceType: "rule", resourceId: rule.id,
+      details: { agentId, severity, autoExecute, threatDescription }, ipAddress: req.ip,
+    });
 
     res.status(201).json({
       ruleId: rule.id,

@@ -8,6 +8,8 @@
 
 import { Router } from "express";
 import { createApiKey, listApiKeys, deleteApiKey } from "../../models/api-key/schema.js";
+import { requirePermission } from "../../middleware/permissions.js";
+import { logActivity } from "../../services/activity-logger.js";
 
 export const authRouter = Router();
 
@@ -16,12 +18,18 @@ export const authRouter = Router();
  * Body: { name: string }
  * Returns: { id, key, name } — key is shown ONLY once
  */
-authRouter.post("/api-keys", async (req: any, res, next) => {
+authRouter.post("/api-keys", requirePermission("api_keys:manage"), async (req: any, res, next) => {
   try {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: "Missing name" });
 
     const result = await createApiKey(req.guardianAccountId, req.userId, name);
+
+    logActivity({
+      orgId: req.guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
+      action: "api_key.create", resourceType: "api_key", resourceId: result.id,
+      details: { name }, ipAddress: req.ip,
+    });
 
     res.status(201).json({
       id: result.id,
@@ -35,7 +43,7 @@ authRouter.post("/api-keys", async (req: any, res, next) => {
 /**
  * GET /auth/api-keys — List API keys (metadata only)
  */
-authRouter.get("/api-keys", async (req: any, res, next) => {
+authRouter.get("/api-keys", requirePermission("api_keys:manage"), async (req: any, res, next) => {
   try {
     const keys = await listApiKeys(req.guardianAccountId);
     res.json({ keys });
@@ -47,7 +55,7 @@ authRouter.get("/api-keys", async (req: any, res, next) => {
  * Creates a new key with the same name and revokes the old one atomically.
  * Returns: { id, key, name, previousKeyRevoked: true }
  */
-authRouter.post("/api-keys/:id/roll", async (req: any, res, next) => {
+authRouter.post("/api-keys/:id/roll", requirePermission("api_keys:manage"), async (req: any, res, next) => {
   try {
     // Get the existing key's metadata
     const keys = await listApiKeys(req.guardianAccountId);
@@ -64,6 +72,12 @@ authRouter.post("/api-keys/:id/roll", async (req: any, res, next) => {
     // Revoke old key
     await deleteApiKey(req.params.id, req.guardianAccountId);
 
+    logActivity({
+      orgId: req.guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
+      action: "api_key.roll", resourceType: "api_key", resourceId: result.id,
+      details: { name: existing.name, previousKeyId: req.params.id }, ipAddress: req.ip,
+    });
+
     res.status(201).json({
       id: result.id,
       key: result.key,
@@ -77,10 +91,17 @@ authRouter.post("/api-keys/:id/roll", async (req: any, res, next) => {
 /**
  * DELETE /auth/api-keys/:id — Revoke an API key
  */
-authRouter.delete("/api-keys/:id", async (req: any, res, next) => {
+authRouter.delete("/api-keys/:id", requirePermission("api_keys:manage"), async (req: any, res, next) => {
   try {
     const deleted = await deleteApiKey(req.params.id, req.guardianAccountId);
     if (!deleted) return res.status(404).json({ error: "API key not found" });
+
+    logActivity({
+      orgId: req.guardianAccountId, actorUserId: req.userId, actorEmail: req.auth?.email,
+      action: "api_key.revoke", resourceType: "api_key", resourceId: req.params.id,
+      ipAddress: req.ip,
+    });
+
     res.json({ deleted: true });
   } catch (e) { next(e); }
 });

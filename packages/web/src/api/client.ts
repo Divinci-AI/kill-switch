@@ -7,9 +7,18 @@
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8090";
 
 let getAccessToken: (() => Promise<string | null>) | null = null;
+let activeOrgId: string | null = null;
 
 export function setTokenGetter(fn: () => Promise<string | null>) {
   getAccessToken = fn;
+}
+
+export function setActiveOrgId(orgId: string | null) {
+  activeOrgId = orgId;
+}
+
+export function getActiveOrgId(): string | null {
+  return activeOrgId;
 }
 
 async function guardianFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -21,6 +30,10 @@ async function guardianFetch<T>(path: string, options: RequestInit = {}): Promis
   if (getAccessToken) {
     const token = await getAccessToken();
     headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  if (activeOrgId) {
+    headers["X-Org-Id"] = activeOrgId;
   }
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
@@ -163,4 +176,43 @@ export const api = {
       method: "POST",
       body: JSON.stringify(customValues || {}),
     }),
+
+  // Organizations
+  listOrgs: () => guardianFetch<any>("/orgs"),
+  createOrg: (name: string) =>
+    guardianFetch<any>("/orgs", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  getOrg: (orgId: string) => guardianFetch<any>(`/orgs/${orgId}`),
+  updateOrg: (orgId: string, data: { name?: string; slug?: string }) =>
+    guardianFetch<any>(`/orgs/${orgId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteOrg: (orgId: string) =>
+    guardianFetch<any>(`/orgs/${orgId}`, { method: "DELETE" }),
+  switchOrg: (orgId: string) =>
+    guardianFetch<any>(`/orgs/${orgId}/switch`, { method: "POST" }),
+  convertPersonalToOrg: (name: string) =>
+    guardianFetch<any>("/orgs/convert-personal", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+
+  // Activity Log
+  getActivity: (params?: {
+    page?: number; limit?: number; action?: string;
+    resourceType?: string; from?: string; to?: string;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set("page", String(params.page));
+    if (params?.limit) qs.set("limit", String(params.limit));
+    if (params?.action) qs.set("action", params.action);
+    if (params?.resourceType) qs.set("resourceType", params.resourceType);
+    if (params?.from) qs.set("from", params.from);
+    if (params?.to) qs.set("to", params.to);
+    const queryStr = qs.toString();
+    return guardianFetch<any>(`/activity${queryStr ? `?${queryStr}` : ""}`);
+  },
 };
