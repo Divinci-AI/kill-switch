@@ -70,10 +70,12 @@ export const datadogProvider: CloudProvider = {
       const month = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
       const usage = await ddRequest(credential, `/usage/summary?start_month=${month}`);
       hostCount = usage?.host_count || usage?.usage?.[0]?.host_count || 0;
-      const logBytes = usage?.logs_indexed_events_count || usage?.usage?.[0]?.ingested_events_bytes_sum || 0;
-      logIngestGB = logBytes / (1024 ** 3);
+      // Monthly totals — divide by days elapsed to get daily average
+      const dayOfMonth = Math.max(1, now.getDate());
+      const monthlyLogBytes = usage?.usage?.[0]?.ingested_events_bytes_sum || 0;
+      logIngestGB = (monthlyLogBytes / (1024 ** 3)) / dayOfMonth;
       if (!isFinite(logIngestGB)) logIngestGB = 0;
-      // Datadog Pro: ~$23/host/month (~$0.77/day), logs ~$0.10/GB
+      // Datadog Pro: ~$23/host/month (~$0.77/day), logs ~$0.10/GB/day
       totalCost = hostCount * 0.77 + logIngestGB * 0.10;
       if (!isFinite(totalCost)) totalCost = 0;
     } catch {
