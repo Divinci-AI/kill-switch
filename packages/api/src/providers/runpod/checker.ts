@@ -413,9 +413,7 @@ export const runpodProvider: CloudProvider = {
           myself {
             id
             email
-            currentSpend {
-              currentCharges
-            }
+            currentSpendPerHr
           }
         }
       `);
