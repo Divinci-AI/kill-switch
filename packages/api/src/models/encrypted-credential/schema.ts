@@ -120,9 +120,12 @@ export async function storeCredential(
 
 /**
  * Retrieve and decrypt a credential.
+ * When guardianAccountId is provided, enforces ownership check (defense in depth).
  */
-export async function getCredential(credentialId: string): Promise<DecryptedCredential | null> {
-  const doc = await EncryptedCredentialModel.findById(credentialId);
+export async function getCredential(credentialId: string, guardianAccountId?: string): Promise<DecryptedCredential | null> {
+  const query: any = { _id: credentialId };
+  if (guardianAccountId) query.guardianAccountId = guardianAccountId;
+  const doc = await EncryptedCredentialModel.findOne(query);
   if (!doc) return null;
 
   const plaintext = decrypt({

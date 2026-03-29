@@ -174,8 +174,8 @@ cloudAccountRouter.delete("/:id", async (req, res, next) => {
  */
 cloudAccountRouter.post("/:id/check", async (req, res, next) => {
   try {
-    // For now, run full cycle — in future, check single account
-    const results = await runCheckCycle();
+    const guardianAccountId = (req as any).guardianAccountId;
+    const results = await runCheckCycle(guardianAccountId);
     const result = results.find(r => r.cloudAccountId === req.params.id);
     res.json(result || { status: "not found" });
   } catch (e) {
