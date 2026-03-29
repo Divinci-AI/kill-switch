@@ -27,6 +27,9 @@ import { getUsageHistory, getAlertHistory, getAnalyticsOverview } from "./global
 export function createApp() {
   const app = express();
 
+  // Trust proxy — 1 hop (Cloud Run sits behind Google's load balancer)
+  app.set("trust proxy", 1);
+
   // CORS — always use explicit allowlist (never open wildcard)
   const defaultOrigins = process.env.NODE_ENV === "test"
     ? ["http://localhost:3000"]
@@ -49,7 +52,7 @@ export function createApp() {
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("X-XSS-Protection", "1; mode=block");
     res.setHeader("Referrer-Policy", "same-origin");
-    res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.auth0.com https://*.stripe.com https://api.kill-switch.net; frame-src https://*.stripe.com; object-src 'none'; base-uri 'self'");
+    res.setHeader("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.clerk.accounts.dev https://*.stripe.com https://api.kill-switch.net; frame-src https://*.stripe.com; object-src 'none'; base-uri 'self'");
     if (process.env.NODE_ENV === "production") {
       res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     }
@@ -80,15 +83,16 @@ export function createApp() {
   if (process.env.NODE_ENV !== "test") {
     // Per-user key generator: uses authenticated userId if available, falls back to IP
     const perUserKey = (req: any) => req.userId || req.ip;
+    const rlOpts = { validate: { trustProxy: false, xForwardedForHeader: false } };
     // General: 100 requests per 15 minutes per IP
-    app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false }));
+    app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false, ...rlOpts }));
     // Strict per-user limits on sensitive endpoints
-    app.use("/providers", rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyGenerator: perUserKey }));
-    app.use("/database/kill", rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyGenerator: perUserKey }));
-    app.use("/billing/checkout", rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyGenerator: perUserKey }));
-    app.use("/alerts/test", rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyGenerator: perUserKey }));
-    app.use("/team/invite", rateLimit({ windowMs: 15 * 60 * 1000, max: 20, keyGenerator: perUserKey }));
-    app.use("/agent/report", rateLimit({ windowMs: 15 * 60 * 1000, max: 30 }));
+    app.use("/providers", rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyGenerator: perUserKey, ...rlOpts }));
+    app.use("/database/kill", rateLimit({ windowMs: 15 * 60 * 1000, max: 10, keyGenerator: perUserKey, ...rlOpts }));
+    app.use("/billing/checkout", rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyGenerator: perUserKey, ...rlOpts }));
+    app.use("/alerts/test", rateLimit({ windowMs: 15 * 60 * 1000, max: 5, keyGenerator: perUserKey, ...rlOpts }));
+    app.use("/team/invite", rateLimit({ windowMs: 15 * 60 * 1000, max: 20, keyGenerator: perUserKey, ...rlOpts }));
+    app.use("/agent/report", rateLimit({ windowMs: 15 * 60 * 1000, max: 30, ...rlOpts }));
   }
 
   // Skip morgan in test
@@ -265,6 +269,8 @@ export function createApp() {
 
   // Error handler
   app.use((err: any, _req: any, res: any, _next: any) => {
+    console.error("[guardian] Unhandled error:", err.message || err);
+    if (err.stack) console.error(err.stack);
     res.status(err.status || 500).json({ error: process.env.NODE_ENV === "production" ? "Internal server error" : (err.message || "Internal server error") });
   });
 
