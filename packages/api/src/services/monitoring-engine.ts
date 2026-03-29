@@ -22,6 +22,9 @@ function getDefaultKillAction(provider: ProviderId): KillAction {
     case "gcp":        return "scale-down";
     case "aws":        return "stop-instances";
     case "runpod":     return "stop-pod";
+    case "redis":      return "kill-connections";
+    case "mongodb":    return "kill-connections";
+    default:           return "disconnect";
   }
 }
 

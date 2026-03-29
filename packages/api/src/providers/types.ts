@@ -5,7 +5,10 @@
  * behind a common interface. Supports both cost and security kill switches.
  */
 
-export type ProviderId = "cloudflare" | "gcp" | "aws" | "runpod";
+export type ProviderId = "cloudflare" | "gcp" | "aws" | "runpod" | "redis" | "mongodb";
+
+export type RedisSubType = "redis-cloud" | "elasticache" | "self-hosted";
+export type MongoDBSubType = "atlas" | "self-hosted";
 
 // ─── Usage & Cost Monitoring ────────────────────────────────────────────────
 
@@ -86,7 +89,10 @@ export type KillAction =
   | "deny-scp"            // Apply deny-all Service Control Policy (nuclear, AWS)
   | "deny-bucket-policy" // Apply deny-all S3 bucket policy (reversible, AWS)
   | "stop-pod"           // Stop a GPU pod — disk persists (reversible, RunPod)
-  | "terminate-pod";     // Terminate a GPU pod — irreversible (RunPod)
+  | "terminate-pod"      // Terminate a GPU pod — irreversible (RunPod)
+  | "flush-redis"        // FLUSHALL — clear all data (destructive, Redis)
+  | "pause-cluster"      // Pause managed cluster (reversible, Redis Cloud/Atlas)
+  | "kill-connections";  // Kill all active connections (Redis/MongoDB)
 
 export interface ActionResult {
   success: boolean;
@@ -148,6 +154,20 @@ export interface ThresholdConfig {
   runpodNetworkVolumeGB?: number;       // Max network volume storage GB
   runpodDailyCostUSD?: number;          // Max daily RunPod spend
 
+  // ─── Redis Thresholds ────────────────────────────────────────────────────────
+  redisMemoryUsageMB?: number;             // Max Redis memory usage (MB)
+  redisConnectedClients?: number;          // Max connected clients
+  redisCommandsPerSec?: number;            // Max commands/sec
+  redisEvictedKeysPerDay?: number;         // Max evicted keys/day (memory pressure)
+  redisDailyCostUSD?: number;              // Max daily Redis spend
+
+  // ─── MongoDB Thresholds ─────────────────────────────────────────────────────
+  mongodbStorageSizeGB?: number;           // Max data + index storage (GB)
+  mongodbActiveConnections?: number;       // Max active connections
+  mongodbOpsPerSec?: number;               // Max operations/sec
+  mongodbCollectionCount?: number;         // Max collections (sprawl detection)
+  mongodbDailyCostUSD?: number;            // Max daily MongoDB spend
+
   // ─── Shared Thresholds ──────────────────────────────────────────────────────
   monthlySpendLimitUSD?: number;
   requestsPerMinute?: number;       // DDoS detection
@@ -174,6 +194,22 @@ export interface DecryptedCredential {
   awsRoleArn?: string;  // Optional: for cross-account assume-role
   // RunPod
   runpodApiKey?: string;
+  // Redis
+  redisSubType?: RedisSubType;
+  redisCloudAccountKey?: string;
+  redisCloudSecretKey?: string;
+  redisCloudSubscriptionId?: string;
+  redisUrl?: string;              // redis://user:pass@host:port (self-hosted)
+  redisTlsEnabled?: boolean;
+  elasticacheClusterId?: string;  // ElastiCache reuses awsAccessKeyId/awsSecretAccessKey/awsRegion
+  // MongoDB
+  mongodbSubType?: MongoDBSubType;
+  atlasPublicKey?: string;
+  atlasPrivateKey?: string;
+  atlasProjectId?: string;
+  atlasClusterName?: string;
+  mongodbUri?: string;            // mongodb+srv://... (self-hosted)
+  mongodbDatabaseName?: string;
 }
 
 // ─── Forensic Snapshot ──────────────────────────────────────────────────────
